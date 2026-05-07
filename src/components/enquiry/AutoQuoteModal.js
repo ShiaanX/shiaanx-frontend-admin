@@ -248,7 +248,20 @@ const AutoQuoteModal = ({ enquiryId, part, onClose, onSave }) => {
               <div className="aq-card">
                 <div className="aq-card-head">
                   <h3>Quote Summary Breakdown</h3>
-                  <span>Subtotal: ₹ {derived.subTotal.toLocaleString()}</span>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    {S.pdf_url && (
+                      <a 
+                        href={`http://localhost:5001${S.pdf_url}`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="aq-btn aq-btn-ghost aq-btn-sm"
+                        style={{ color: 'var(--aq-teal)', borderColor: 'var(--aq-teal)' }}
+                      >
+                        <MdLocalShipping style={{ marginRight: 4 }} /> Download Program Sheet (PDF)
+                      </a>
+                    )}
+                    <span>Subtotal: ₹ {derived.subTotal.toLocaleString()}</span>
+                  </div>
                 </div>
                 <div className="aq-card-body">
                   <table className="aq-table">
@@ -595,8 +608,6 @@ const AutoQuoteModal = ({ enquiryId, part, onClose, onSave }) => {
                   </div>
                 </div>
               </div>
-            )}
-
             )}
           </main>
         </div>
