@@ -13,6 +13,7 @@ import OrderForm from './pages/OrderForm';
 import Users from './pages/Users';
 import Vendors from './pages/Vendors';
 import Analytics from './pages/Analytics';
+import Telemetry from './pages/Telemetry';
 import MakeEnquiry from './pages/MakeEnquiry';
 import MasterAttributes from './pages/MasterAttributes';
 import { AuthProvider } from './context/AuthContext';
@@ -49,6 +50,7 @@ function App() {
           <Route path="/users" element={<Users />} />
           <Route path="/vendors" element={<Vendors />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/telemetry" element={<Telemetry />} />
           <Route path="/make-enquiry" element={<MakeEnquiry />} />
           <Route path="/master-attributes" element={<MasterAttributes />} />
         </Route>
