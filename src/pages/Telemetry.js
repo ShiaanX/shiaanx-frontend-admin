@@ -62,6 +62,18 @@ function Telemetry() {
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <button 
+                className="btn-primary" 
+                onClick={() => {
+                    const params = {};
+                    if (dateRange.startDate) params.startDate = new Date(dateRange.startDate).toISOString();
+                    if (dateRange.endDate) params.endDate = new Date(dateRange.endDate).toISOString();
+                    window.open(telemetryService.getExportUrl(params), '_blank');
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+            >
+                Export All Data (CSV)
+            </button>
+            <button 
                 className="btn-secondary" 
                 onClick={fetchTelemetry}
                 disabled={loading}
