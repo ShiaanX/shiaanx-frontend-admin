@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FiActivity, FiRefreshCw, FiClock, FiDatabase, FiFilter, FiCalendar } from 'react-icons/fi';
+import { FiActivity, FiRefreshCw, FiClock, FiDatabase, FiFilter, FiCalendar, FiCode } from 'react-icons/fi';
 import telemetryService from '../services/telemetryService';
 import toast from 'react-hot-toast';
 
@@ -7,9 +7,10 @@ function Telemetry() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState(100);
-  const [dateRange, setDateRange] = useState({
+  const [filters, setFilters] = useState({
     startDate: '',
-    endDate: ''
+    endDate: '',
+    programName: ''
   });
 
   const fetchTelemetry = async () => {
@@ -17,11 +18,14 @@ function Telemetry() {
       setLoading(true);
       const params = { limit };
       
-      if (dateRange.startDate) {
-        params.startDate = new Date(dateRange.startDate).toISOString();
+      if (filters.startDate) {
+        params.startDate = new Date(filters.startDate).toISOString();
       }
-      if (dateRange.endDate) {
-        params.endDate = new Date(dateRange.endDate).toISOString();
+      if (filters.endDate) {
+        params.endDate = new Date(filters.endDate).toISOString();
+      }
+      if (filters.programName) {
+        params.programName = filters.programName;
       }
 
       const response = await telemetryService.getRawTelemetry(params);
@@ -35,19 +39,26 @@ function Telemetry() {
 
   useEffect(() => {
     fetchTelemetry();
-  }, [limit]); // Fetch on limit change, but manual fetch for date range
+  }, [limit]); // Fetch on limit change
 
   const columns = data.length > 0 ? Object.keys(data[0]).filter(k => k !== '_time') : [];
 
-  const handleDateChange = (e) => {
+  const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setDateRange(prev => ({ ...prev, [name]: value }));
+    setFilters(prev => ({ ...prev, [name]: value }));
   };
 
   const resetFilters = () => {
-    setDateRange({ startDate: '', endDate: '' });
+    setFilters({ startDate: '', endDate: '', programName: '' });
     setLimit(100);
-    // fetchTelemetry will trigger due to limit change or manual call
+  };
+
+  const getExportParams = () => {
+      const params = {};
+      if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();
+      if (filters.endDate) params.endDate = new Date(filters.endDate).toISOString();
+      if (filters.programName) params.programName = filters.programName;
+      return params;
   };
 
   return (
@@ -63,12 +74,7 @@ function Telemetry() {
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <button 
                 className="btn-primary" 
-                onClick={() => {
-                    const params = {};
-                    if (dateRange.startDate) params.startDate = new Date(dateRange.startDate).toISOString();
-                    if (dateRange.endDate) params.endDate = new Date(dateRange.endDate).toISOString();
-                    window.open(telemetryService.getExportUrl(params), '_blank');
-                }}
+                onClick={() => window.open(telemetryService.getExportUrl(getExportParams()), '_blank')}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
             >
                 Export All Data (CSV)
@@ -94,15 +100,13 @@ function Telemetry() {
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Start Date/Time</label>
-                  <div style={{ position: 'relative' }}>
-                      <input 
-                        type="datetime-local" 
-                        name="startDate"
-                        value={dateRange.startDate}
-                        onChange={handleDateChange}
-                        style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem' }} 
-                      />
-                  </div>
+                  <input 
+                    type="datetime-local" 
+                    name="startDate"
+                    value={filters.startDate}
+                    onChange={handleFilterChange}
+                    style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem' }} 
+                  />
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -110,10 +114,25 @@ function Telemetry() {
                   <input 
                     type="datetime-local" 
                     name="endDate"
-                    value={dateRange.endDate}
-                    onChange={handleDateChange}
+                    value={filters.endDate}
+                    onChange={handleFilterChange}
                     style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem' }} 
                   />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Program Name</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white' }}>
+                    <FiCode color="#a0aec0" />
+                    <input 
+                        type="text" 
+                        name="programName"
+                        placeholder="Search program..."
+                        value={filters.programName}
+                        onChange={handleFilterChange}
+                        style={{ border: 'none', outline: 'none', fontSize: '0.875rem', width: '150px' }} 
+                    />
+                  </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
