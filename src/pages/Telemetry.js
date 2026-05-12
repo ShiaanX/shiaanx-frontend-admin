@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { FiActivity, FiRefreshCw, FiClock, FiDatabase, FiFilter, FiCalendar, FiCode } from 'react-icons/fi';
+import { FiActivity, FiRefreshCw, FiClock, FiDatabase, FiFilter, FiCalendar, FiCode, FiChevronDown } from 'react-icons/fi';
 import telemetryService from '../services/telemetryService';
 import toast from 'react-hot-toast';
 
 function Telemetry() {
   const [data, setData] = useState([]);
+  const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [limit, setLimit] = useState(100);
   const [filters, setFilters] = useState({
     startDate: '',
@@ -37,8 +39,21 @@ function Telemetry() {
     }
   };
 
+  const fetchPrograms = async () => {
+    try {
+      setLoadingPrograms(true);
+      const response = await telemetryService.getPrograms();
+      setPrograms(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch programs:', err);
+    } finally {
+      setLoadingPrograms(false);
+    }
+  };
+
   useEffect(() => {
     fetchTelemetry();
+    fetchPrograms();
   }, [limit]); // Fetch on limit change
 
   const columns = data.length > 0 ? Object.keys(data[0]).filter(k => k !== '_time') : [];
@@ -122,16 +137,23 @@ function Telemetry() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Program Name</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white' }}>
-                    <FiCode color="#a0aec0" />
-                    <input 
-                        type="text" 
+                  <div style={{ position: 'relative' }}>
+                    <select 
                         name="programName"
-                        placeholder="Search program..."
                         value={filters.programName}
                         onChange={handleFilterChange}
-                        style={{ border: 'none', outline: 'none', fontSize: '0.875rem', width: '150px' }} 
-                    />
+                        style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '200px' }}
+                    >
+                        <option value="">All Programs</option>
+                        {loadingPrograms ? (
+                            <option disabled>Loading...</option>
+                        ) : (
+                            programs.map(p => (
+                                <option key={p} value={p}>{p}</option>
+                            ))
+                        )}
+                    </select>
+                    <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
                   </div>
               </div>
 
@@ -226,7 +248,7 @@ function Telemetry() {
                 data.map((row, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                     <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#4a5568', fontWeight: 500 }}>
-                      {new Date(row._time).toLocaleString()}
+                      {new Date(row._time).toLocaleString('en-GB')}
                     </td>
                     {columns.map(col => (
                       <td key={col} style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#2d3748' }}>
