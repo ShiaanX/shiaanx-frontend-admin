@@ -7,35 +7,58 @@ function Telemetry() {
   const [data, setData] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [limit, setLimit] = useState(100);
+  const [pagination, setPagination] = useState({
+    nextCursor: null,
+    hasNextPage: false
+  });
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    programName: ''
+    programName: '',
+    range: '-2d'
   });
 
-  const fetchTelemetry = async () => {
+  const fetchTelemetry = async (cursor = null) => {
     try {
-      setLoading(true);
+      const isLoadMore = !!cursor;
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
       const params = { limit };
+      if (cursor) params.cursor = String(cursor);
       
-      if (filters.startDate) {
-        params.startDate = new Date(filters.startDate).toISOString();
+      // Only send range if no specific dates are selected
+      if (filters.startDate || filters.endDate) {
+        if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();
+        if (filters.endDate) params.endDate = new Date(filters.endDate).toISOString();
+      } else {
+        params.range = filters.range;
       }
-      if (filters.endDate) {
-        params.endDate = new Date(filters.endDate).toISOString();
-      }
+
       if (filters.programName) {
         params.programName = filters.programName;
       }
 
       const response = await telemetryService.getRawTelemetry(params);
-      setData(response.data || []);
+      
+      if (isLoadMore) {
+        setData(prev => [...prev, ...(response.data || [])]);
+      } else {
+        setData(response.data || []);
+      }
+
+      setPagination(response.pagination || { nextCursor: null, hasNextPage: false });
     } catch (err) {
       toast.error(err.message || 'Failed to fetch telemetry data');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -60,18 +83,38 @@ function Telemetry() {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
+    
+    setFilters(prev => {
+        const newFilters = { ...prev, [name]: value };
+        
+        // If range is selected, clear dates
+        if (name === 'range' && value !== 'custom') {
+            newFilters.startDate = '';
+            newFilters.endDate = '';
+        }
+        
+        // If dates are changed, set range to custom
+        if ((name === 'startDate' || name === 'endDate') && value !== '') {
+            newFilters.range = 'custom';
+        }
+        
+        return newFilters;
+    });
   };
 
   const resetFilters = () => {
-    setFilters({ startDate: '', endDate: '', programName: '' });
+    setFilters({ startDate: '', endDate: '', programName: '', range: '-2d' });
     setLimit(100);
   };
 
   const getExportParams = () => {
       const params = {};
-      if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();
-      if (filters.endDate) params.endDate = new Date(filters.endDate).toISOString();
+      if (filters.startDate || filters.endDate) {
+          if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();
+          if (filters.endDate) params.endDate = new Date(filters.endDate).toISOString();
+      } else {
+          params.range = filters.range;
+      }
       if (filters.programName) params.programName = filters.programName;
       return params;
   };
@@ -113,6 +156,27 @@ function Telemetry() {
           </div>
           
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Quick Range</label>
+                  <div style={{ position: 'relative' }}>
+                    <select 
+                        name="range"
+                        value={filters.range}
+                        onChange={handleFilterChange}
+                        style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '150px' }}
+                    >
+                        <option value="-1h">Last 1 Hour</option>
+                        <option value="-6h">Last 6 Hours</option>
+                        <option value="-12h">Last 12 Hours</option>
+                        <option value="-1d">Last 24 Hours</option>
+                        <option value="-2d">Last 2 Days</option>
+                        <option value="-7d">Last 7 Days</option>
+                        <option value="-30d">Last 30 Days</option>
+                        <option value="custom" disabled={filters.range !== 'custom'}>Custom Range</option>
+                    </select>
+                    <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
+                  </div>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Start Date/Time</label>
                   <input 
@@ -261,6 +325,49 @@ function Telemetry() {
             </tbody>
           </table>
         </div>
+        
+        {pagination.hasNextPage && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem', borderTop: '1px solid #f1f5f9' }}>
+            <button
+              onClick={() => fetchTelemetry(pagination.nextCursor)}
+              disabled={loadingMore}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.75rem 2rem',
+                backgroundColor: 'white',
+                color: 'var(--primary)',
+                border: '1px solid var(--primary)',
+                borderRadius: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = 'var(--primary)';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = 'white';
+                e.currentTarget.style.color = 'var(--primary)';
+              }}
+            >
+              {loadingMore ? (
+                <>
+                  <FiRefreshCw className="animate-spin" />
+                  <span>Loading More...</span>
+                </>
+              ) : (
+                <>
+                  <span>Load More Records</span>
+                  <FiChevronDown />
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
