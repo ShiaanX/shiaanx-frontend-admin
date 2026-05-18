@@ -21,9 +21,16 @@ function Telemetry() {
     range: '-2d'
   });
 
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [mappings, setMappings] = useState([]);
+  const [mappingForm, setMappingForm] = useState({ program: '', toolName: '' });
+  const [isSavingMapping, setIsSavingMapping] = useState(false);
+
   const fetchTelemetry = async (cursor = null) => {
     try {
-      const isLoadMore = !!cursor;
+      // Ignore event objects passed accidentally via onClick
+      const actualCursor = (cursor && typeof cursor !== 'object') ? String(cursor) : null;
+      const isLoadMore = !!actualCursor;
       if (isLoadMore) {
         setLoadingMore(true);
       } else {
@@ -31,7 +38,7 @@ function Telemetry() {
       }
 
       const params = { limit };
-      if (cursor) params.cursor = String(cursor);
+      if (actualCursor) params.cursor = actualCursor;
       
       // Only send range if no specific dates are selected
       if (filters.startDate || filters.endDate) {
@@ -74,12 +81,85 @@ function Telemetry() {
     }
   };
 
+  const fetchMappings = async () => {
+    try {
+      const response = await telemetryService.getMappings();
+      setMappings(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch mappings:', err);
+    }
+  };
+
+  const handleMappingSubmit = async (e) => {
+    e.preventDefault();
+    if (!mappingForm.program || !mappingForm.toolName) {
+      toast.error('Please fill all fields');
+      return;
+    }
+
+    try {
+      setIsSavingMapping(true);
+      await telemetryService.upsertMapping({
+        program_name: mappingForm.program,
+        tool_name: mappingForm.toolName,
+        sync_historical: true
+      });
+      toast.success(`Rule saved! Historical data for ${mappingForm.program} is being updated.`);
+      setMappingForm({ program: '', toolName: '' });
+      fetchMappings();
+      // Wait a bit and refresh telemetry to show new tool names
+      setTimeout(fetchTelemetry, 2000);
+    } catch (err) {
+      toast.error(err.message || 'Failed to save mapping');
+    } finally {
+      setIsSavingMapping(false);
+    }
+  };
+
+  const handleDeleteMapping = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this rule?')) return;
+    try {
+      await telemetryService.deleteMapping(id);
+      toast.success('Mapping deleted');
+      fetchMappings();
+    } catch (err) {
+      toast.error('Failed to delete mapping');
+    }
+  };
+
   useEffect(() => {
     fetchTelemetry();
     fetchPrograms();
+    fetchMappings();
   }, [limit]); // Fetch on limit change
 
-  const columns = data.length > 0 ? Object.keys(data[0]).filter(k => k !== '_time') : [];
+  const columns = React.useMemo(() => {
+    if (!data || data.length === 0) return [];
+    
+    const preferredOrder = [
+      'factory_id', 'machine_id', 'program_name', 'tool_number', 'tool_name',
+      'alarm_active', 'machine_state', 'machine_mode', 'program_runtime',
+      'spindle_speed', 'spindle_override', 'feed_rate', 'feed_override',
+      'axis_x', 'axis_y', 'axis_z'
+    ];
+
+    const allKeys = new Set();
+    data.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key !== '_time') allKeys.add(key);
+      });
+    });
+
+    return Array.from(allKeys).sort((a, b) => {
+      const indexA = preferredOrder.indexOf(a);
+      const indexB = preferredOrder.indexOf(b);
+      
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [data]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -131,6 +211,13 @@ function Telemetry() {
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <button 
+                className="btn-secondary" 
+                onClick={() => setIsMappingModalOpen(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', backgroundColor: '#fff', border: '1px solid var(--primary)', color: 'var(--primary)', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+            >
+                <FiCode /> Program Tool Mapping
+            </button>
+            <button 
                 className="btn-primary" 
                 onClick={() => window.open(telemetryService.getExportUrl(getExportParams()), '_blank')}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
@@ -139,7 +226,7 @@ function Telemetry() {
             </button>
             <button 
                 className="btn-secondary" 
-                onClick={fetchTelemetry}
+                onClick={() => fetchTelemetry()}
                 disabled={loading}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', backgroundColor: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
             >
@@ -147,6 +234,77 @@ function Telemetry() {
             </button>
         </div>
       </div>
+
+      {/* Mapping Modal */}
+      {isMappingModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '600px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Program Tool Mappings</h2>
+              <button onClick={() => setIsMappingModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleMappingSubmit} style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Add New Rule</h3>
+              <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 600 }}>Select Program</label>
+                  <select 
+                    value={mappingForm.program} 
+                    onChange={e => setMappingForm({...mappingForm, program: e.target.value})}
+                    style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  >
+                    <option value="">-- Choose Program --</option>
+                    {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 600 }}>Manual Tool Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Roughing End Mill 10mm"
+                    value={mappingForm.toolName}
+                    onChange={e => setMappingForm({...mappingForm, toolName: e.target.value})}
+                    style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={isSavingMapping}
+                  style={{ marginTop: '0.5rem', padding: '0.75rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isSavingMapping ? 'Saving & Syncing...' : 'Save Rule & Sync History'}
+                </button>
+              </div>
+            </form>
+
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Existing Rules</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '0.5rem', fontSize: '0.875rem' }}>Program</th>
+                    <th style={{ padding: '0.5rem', fontSize: '0.875rem' }}>Tool Name</th>
+                    <th style={{ padding: '0.5rem' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mappings.map(m => (
+                    <tr key={m.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem' }}>{m.program_name}</td>
+                      <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem' }}>{m.tool_name}</td>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>
+                        <button onClick={() => handleDeleteMapping(m.id)} style={{ color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {mappings.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', padding: '1rem', color: '#718096' }}>No mapping rules defined.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters Section */}
       <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
@@ -237,7 +395,7 @@ function Telemetry() {
 
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button 
-                    onClick={fetchTelemetry}
+                    onClick={() => fetchTelemetry()}
                     style={{ padding: '0.625rem 1.5rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
                   >
                     Apply Filters

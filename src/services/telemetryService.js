@@ -11,6 +11,15 @@ const telemetryService = {
   },
   getPrograms: async () => {
     return api.get('/admin/telemetry/programs');
+  },
+  getMappings: async () => {
+    return api.get('/admin/telemetry/mappings');
+  },
+  upsertMapping: async (data) => {
+    return api.post('/admin/telemetry/mappings', data);
+  },
+  deleteMapping: async (id) => {
+    return api.delete(`/admin/telemetry/mappings/${id}`);
   }
 };
 
