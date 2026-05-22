@@ -23,7 +23,7 @@ function Telemetry() {
 
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   const [mappings, setMappings] = useState([]);
-  const [mappingForm, setMappingForm] = useState({ program: '', toolName: '' });
+  const [mappingForm, setMappingForm] = useState({ program: '', toolNumber: '', toolName: '' });
   const [isSavingMapping, setIsSavingMapping] = useState(false);
 
   const fetchTelemetry = async (cursor = null) => {
@@ -90,9 +90,9 @@ function Telemetry() {
     }
   };
 
-  const handleMappingSubmit = async (e) => {
-    e.preventDefault();
-    if (!mappingForm.program || !mappingForm.toolName) {
+  const handleMappingSubmit = async (e, syncHistorical = false) => {
+    if (e) e.preventDefault();
+    if (!mappingForm.program || !mappingForm.toolNumber || !mappingForm.toolName) {
       toast.error('Please fill all fields');
       return;
     }
@@ -101,11 +101,18 @@ function Telemetry() {
       setIsSavingMapping(true);
       await telemetryService.upsertMapping({
         program_name: mappingForm.program,
+        tool_number: Number(mappingForm.toolNumber),
         tool_name: mappingForm.toolName,
-        sync_historical: true
+        sync_historical: syncHistorical
       });
-      toast.success(`Rule saved! Historical data for ${mappingForm.program} is being updated.`);
-      setMappingForm({ program: '', toolName: '' });
+      
+      if (syncHistorical) {
+        toast.success(`Rule saved! Historical data for ${mappingForm.program} is being updated.`);
+      } else {
+        toast.success(`Rule saved! Future data for ${mappingForm.program} will use this name.`);
+      }
+      
+      setMappingForm({ program: '', toolNumber: '', toolName: '' });
       fetchMappings();
       // Wait a bit and refresh telemetry to show new tool names
       setTimeout(fetchTelemetry, 2000);
@@ -124,6 +131,21 @@ function Telemetry() {
       fetchMappings();
     } catch (err) {
       toast.error('Failed to delete mapping');
+    }
+  };
+
+  const handleSyncMapping = async (m) => {
+    try {
+      await telemetryService.upsertMapping({
+        program_name: m.program_name,
+        tool_number: m.tool_number,
+        tool_name: m.tool_name,
+        sync_historical: true
+      });
+      toast.success(`Historical sync started for ${m.program_name} (T${m.tool_number})`);
+      setTimeout(fetchTelemetry, 2000);
+    } catch (err) {
+      toast.error('Failed to start sync');
     }
   };
 
@@ -244,7 +266,7 @@ function Telemetry() {
               <button onClick={() => setIsMappingModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
             </div>
 
-            <form onSubmit={handleMappingSubmit} style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <form onSubmit={e => e.preventDefault()} style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Add New Rule</h3>
               <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -259,6 +281,16 @@ function Telemetry() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 600 }}>Tool Number</label>
+                  <input 
+                    type="number" 
+                    placeholder="e.g. 1"
+                    value={mappingForm.toolNumber}
+                    onChange={e => setMappingForm({...mappingForm, toolNumber: e.target.value})}
+                    style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.875rem', fontWeight: 600 }}>Manual Tool Name</label>
                   <input 
                     type="text" 
@@ -268,13 +300,25 @@ function Telemetry() {
                     style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}
                   />
                 </div>
-                <button 
-                  type="submit" 
-                  disabled={isSavingMapping}
-                  style={{ marginTop: '0.5rem', padding: '0.75rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  {isSavingMapping ? 'Saving & Syncing...' : 'Save Rule & Sync History'}
-                </button>
+                
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                  <button 
+                    type="button" 
+                    onClick={(e) => handleMappingSubmit(e, false)}
+                    disabled={isSavingMapping}
+                    style={{ flex: 1, padding: '0.75rem', backgroundColor: 'white', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    {isSavingMapping ? 'Saving...' : 'Save Rule Only'}
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={(e) => handleMappingSubmit(e, true)}
+                    disabled={isSavingMapping}
+                    style={{ flex: 1, padding: '0.75rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    {isSavingMapping ? 'Syncing...' : 'Save & Sync History'}
+                  </button>
+                </div>
               </div>
             </form>
 
@@ -284,6 +328,7 @@ function Telemetry() {
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
                     <th style={{ padding: '0.5rem', fontSize: '0.875rem' }}>Program</th>
+                    <th style={{ padding: '0.5rem', fontSize: '0.875rem' }}>Tool Number</th>
                     <th style={{ padding: '0.5rem', fontSize: '0.875rem' }}>Tool Name</th>
                     <th style={{ padding: '0.5rem' }}></th>
                   </tr>
@@ -292,9 +337,11 @@ function Telemetry() {
                   {mappings.map(m => (
                     <tr key={m.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem' }}>{m.program_name}</td>
+                      <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem' }}>T{m.tool_number}</td>
                       <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem' }}>{m.tool_name}</td>
-                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>
-                        <button onClick={() => handleDeleteMapping(m.id)} style={{ color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>Delete</button>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                        <button onClick={() => handleSyncMapping(m)} style={{ color: '#3182ce', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem', padding: '0.25rem' }}>Sync History</button>
+                        <button onClick={() => handleDeleteMapping(m.id)} style={{ color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem', padding: '0.25rem' }}>Delete</button>
                       </td>
                     </tr>
                   ))}
