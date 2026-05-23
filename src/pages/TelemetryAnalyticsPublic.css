@@ -1,0 +1,40 @@
+/* TelemetryAnalyticsPublic.css */
+
+.telemetry-analytics-public {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  color: #e0e0e0;
+  font-family: 'Inter', sans-serif;
+}
+
+.telemetry-analytics-public h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  background: linear-gradient(45deg, #ff6b6b, #f7c548);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.telemetry-analytics-public .data-preview {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: #c0ffee;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.telemetry-analytics-public p {
+  font-size: 1rem;
+  margin-top: 0.5rem;
+  text-align: center;
+}

@@ -18,44 +18,48 @@ import MakeEnquiry from './pages/MakeEnquiry';
 import MasterAttributes from './pages/MasterAttributes';
 import { AuthProvider } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
+// import TelemetryReference from './pages/TelemetryReference';
+// removed as not needed
 import ProtectedRoute from './components/layout/ProtectedRoute';
-import './styles/App.css';
+
+import TelemetryAnalyticsPublic from './pages/TelemetryAnalyticsPublic';
 
 function App() {
   return (
     <AuthProvider>
       <Toaster position="top-right" reverseOrder={false} />
       <Router>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        
-        {/* Protected Routes */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <MainLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/home" element={<Home />} />
-          <Route path="/enquiries" element={<Enquiries />} />
-          <Route path="/enquiries/:id" element={<EnquiryDetails />} /> {/* New Route */}
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/orders/new" element={<OrderForm />} />
-          <Route path="/orders/:id/edit" element={<OrderForm />} />
-          <Route path="/orders/:id" element={<ViewDetails />} />
-          <Route path="/orders/:id/track" element={<TrackOrder />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/vendors" element={<Vendors />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/telemetry" element={<Telemetry />} />
-          <Route path="/make-enquiry" element={<MakeEnquiry />} />
-          <Route path="/master-attributes" element={<MasterAttributes />} />
-        </Route>
-      </Routes>
-    </Router>
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+
+          {/* <Route path="/dashboard-reference" element={<TelemetryReference />} /> */}
+          <Route path="/telemetry-public" element={<TelemetryAnalyticsPublic />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/home" element={<Home />} />
+            <Route path="/enquiries" element={<Enquiries />} />
+            <Route path="/enquiries/:id" element={<EnquiryDetails />} /> {/* New Route */}
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders/new" element={<OrderForm />} />
+            <Route path="/orders/:id/edit" element={<OrderForm />} />
+            <Route path="/orders/:id" element={<ViewDetails />} />
+            <Route path="/orders/:id/track" element={<TrackOrder />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/vendors" element={<Vendors />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/telemetry" element={<Telemetry />} />
+            <Route path="/make-enquiry" element={<MakeEnquiry />} />
+            <Route path="/master-attributes" element={<MasterAttributes />} />
+          </Route>
+        </Routes>
+      </Router>
     </AuthProvider>
   );
 }
