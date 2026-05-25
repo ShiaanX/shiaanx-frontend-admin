@@ -365,24 +365,62 @@ function PublicAnalytics() {
                 </div>
               </div>
               {/* Machine State Distribution Donut Chart */}
-              <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
-                <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>Machine State Distribution</h3>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <PieChart width={320} height={280}>
-                    <Pie data={[
-                      { name: 'Idle (State 0)', value: summary?.machineStateDistribution?.state0Pct || 0 },
-                      { name: 'Running (State 1)', value: summary?.machineStateDistribution?.state1Pct || 0 },
-                      { name: 'M00 Stop (State 2)', value: summary?.machineStateDistribution?.state2Pct || 0 },
-                    ]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={70} outerRadius={100} label={({ name, value }) => `${value.toFixed(1)}%`}>
-                      {DONUT_COLORS.map((color, index) => (
-                        <Cell key={`cell-${index}`} fill={color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(val) => `${val.toFixed(2)}%`} />
-                    <Legend />
-                  </PieChart>
-                </div>
-              </div>
+              {(() => {
+                const donutData = [
+                  { name: 'Idle', label: 'Idle (State 0)', value: summary?.machineStateDistribution?.state0Pct || 0, color: '#94A3B8' },
+                  { name: 'Running', label: 'Running (State 1)', value: summary?.machineStateDistribution?.state1Pct || 0, color: '#2563EB' },
+                  { name: 'M00 Stop', label: 'M00 Stop (State 2)', value: summary?.machineStateDistribution?.state2Pct || 0, color: '#EF4444' },
+                ];
+                const total = summary?.totalRecords || 0;
+                return (
+                  <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
+                    <h3 style={{ marginBottom: '1.5rem', fontSize: '1.25rem', fontWeight: 600 }}>Machine State Distribution</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3rem', flexWrap: 'wrap' }}>
+                      {/* Donut */}
+                      <div style={{ position: 'relative', width: 220, height: 220 }}>
+                        <PieChart width={220} height={220}>
+                          <Pie
+                            data={donutData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={65}
+                            outerRadius={95}
+                            paddingAngle={3}
+                            strokeWidth={0}
+                          >
+                            {donutData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(val, name) => [`${val.toFixed(2)}%`, name]}
+                            contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: '0.85rem' }}
+                          />
+                        </PieChart>
+                        {/* Center label */}
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                          <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.1 }}>{total.toLocaleString()}</span>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 500 }}>total records</span>
+                        </div>
+                      </div>
+                      {/* Custom legend */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        {donutData.map((entry) => (
+                          <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: 14, height: 14, borderRadius: '4px', backgroundColor: entry.color, flexShrink: 0 }} />
+                            <div>
+                              <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.2 }}>{entry.label}</div>
+                              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#1e293b' }}>{entry.value.toFixed(1)}%</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
 
