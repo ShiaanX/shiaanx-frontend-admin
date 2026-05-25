@@ -23,6 +23,7 @@ import { Toaster } from 'react-hot-toast';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
 import TelemetryAnalyticsPublic from './pages/TelemetryAnalyticsPublic';
+import PublicAnalytics from './pages/PublicAnalytics';
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
 
           {/* <Route path="/dashboard-reference" element={<TelemetryReference />} /> */}
           <Route path="/telemetry-public" element={<TelemetryAnalyticsPublic />} />
+          <Route path="/public/analytics" element={<PublicAnalytics />} />
           <Route
             element={
               <ProtectedRoute>

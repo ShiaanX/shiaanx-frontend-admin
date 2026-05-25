@@ -1,26 +1,17 @@
 import api from './api';
 
 const telemetryService = {
-  getRawTelemetry: async (params = {}) => {
-    return api.get('/admin/telemetry/raw', { params });
-  },
+  getRawTelemetry: async (params = {}) => api.get('/public/telemetry/raw', { params }),
   getExportUrl: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
-    return `${baseUrl}/admin/telemetry/export?${query}`;
+    return `${baseUrl}/public/telemetry/export?${query}`;
   },
-  getPrograms: async () => {
-    return api.get('/admin/telemetry/programs');
-  },
-  getMappings: async () => {
-    return api.get('/admin/telemetry/mappings');
-  },
-  upsertMapping: async (data) => {
-    return api.post('/admin/telemetry/mappings', data);
-  },
-  deleteMapping: async (id) => {
-    return api.delete(`/admin/telemetry/mappings/${id}`);
-  }
+  getAnalyticsSummary: async (params = {}) => api.get('/public/telemetry/analytics/summary', { params }),
+  getSpindleTrend: async (params = {}) => api.get('/public/telemetry/analytics/spindle-trend', { params }),
+  getMachineMatrix: async (params = {}) => api.get('/public/telemetry/analytics/machine-matrix', { params }),
+  getProgramMetrics: async (params = {}) => api.get('/public/telemetry/analytics/program-metrics', { params }),
+  getPrograms: async () => api.get('/public/telemetry/programs'),
 };
 
 export default telemetryService;

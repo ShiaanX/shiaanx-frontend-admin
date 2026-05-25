@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiHome, FiUsers, FiMessageSquare, FiShoppingBag, FiPackage, FiTrendingUp, FiSliders, FiActivity } from 'react-icons/fi';
+import { FiHome, FiUsers, FiMessageSquare, FiShoppingBag, FiPackage, FiTrendingUp, FiSliders, FiActivity, FiBarChart } from 'react-icons/fi';
 // We'll assume a shared CSS file or module for layout, adapting from existing styles
 import '../../styles/Enquiries.css'; // Reusing existing styles for now, will refactor to Layout.css later
 
@@ -15,7 +15,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/orders', label: 'All Orders', icon: <FiShoppingBag size={20} /> },
     { path: '/vendors', label: 'Vendor Management', icon: <FiPackage size={20} /> },
     { path: '/analytics', label: 'Analytics', icon: <FiTrendingUp size={20} /> },
-    { path: '/telemetry', label: 'Machine Telemetry', icon: <FiActivity size={20} /> },
+    { path: '/public/analytics', label: 'Public Analytics', icon: <FiBarChart size={20} /> },
     { path: '/master-attributes', label: 'Master Attributes', icon: <FiSliders size={20} /> },
   ];
 
