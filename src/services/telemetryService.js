@@ -11,6 +11,7 @@ const telemetryService = {
   getSpindleTrend: async (params = {}) => api.get('/public/telemetry/analytics/spindle-trend', { params }),
   getMachineMatrix: async (params = {}) => api.get('/public/telemetry/analytics/machine-matrix', { params }),
   getProgramMetrics: async (params = {}) => api.get('/public/telemetry/analytics/program-metrics', { params }),
+  getToolMetrics: async (params = {}) => api.get('/public/telemetry/analytics/tool-metrics', { params }),
   getPrograms: async () => api.get('/public/telemetry/programs'),
 };
 

@@ -71,6 +71,35 @@ function PublicAnalytics() {
   const [programMetrics, setProgramMetrics] = useState(null);
   const [loadingProgramMetrics, setLoadingProgramMetrics] = useState(false);
 
+  // Per-tool state
+  const [toolMetricsData, setToolMetricsData] = useState(null);
+  const [loadingToolMetrics, setLoadingToolMetrics] = useState(false);
+  const [selectedToolRun, setSelectedToolRun] = useState('');
+
+  const fetchToolMetrics = async (progName, runNum = null) => {
+    if (!progName) return;
+    try {
+      setLoadingToolMetrics(true);
+      const params = { programName: progName };
+      if (runNum) params.runNumber = runNum;
+      if (filters.startDate || filters.endDate) {
+        if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();
+        if (filters.endDate) params.endDate = new Date(filters.endDate).toISOString();
+      } else {
+        params.range = filters.range || '-30d';
+      }
+      const res = await telemetryService.getToolMetrics(params);
+      setToolMetricsData(res.data || null);
+      if (res.data) {
+        setSelectedToolRun(res.data.selectedRun);
+      }
+    } catch (e) {
+      console.error('Failed to fetch tool metrics', e);
+    } finally {
+      setLoadingToolMetrics(false);
+    }
+  };
+
   // Fetch summary KPIs
   const fetchSummary = async () => {
     try {
@@ -170,19 +199,30 @@ function PublicAnalytics() {
     const defaultFilters = { startDate: '', endDate: '', programName: '', range: '-2d' };
     setFilters(defaultFilters);
     setLimit(100);
-    const params = { range: '-2d' };
-    telemetryService.getAnalyticsSummary(params).then(res => setSummary(res.data || {}));
-    telemetryService.getMachineMatrix(params).then(res => setMachineMatrix(res.data || []));
-    telemetryService.getRawTelemetry({ limit: 100, range: '-2d' }).then(response => {
-      setRawData(response.data || []);
-      setPagination(response.pagination || { nextCursor: null, hasNextPage: false });
-    });
+    // Only refresh data for the active tab
+    if (selectedTab === 'summary') {
+      const params = { range: '-2d' };
+      telemetryService.getAnalyticsSummary(params).then(res => setSummary(res.data || {}));
+      telemetryService.getMachineMatrix(params).then(res => setMachineMatrix(res.data || []));
+    } else if (selectedTab === 'table') {
+      telemetryService.getRawTelemetry({ limit: 100, range: '-2d' }).then(response => {
+        setRawData(response.data || []);
+        setPagination(response.pagination || { nextCursor: null, hasNextPage: false });
+      });
+    }
+    // Clear initialization so other tabs re-fetch with new filters when visited
+    initializedTabs.current = new Set([selectedTab]);
   };
 
   const handleApplyFilters = () => {
-    fetchSummary();
-    fetchMachineMatrix();
-    fetchTelemetry();
+    if (selectedTab === 'summary') {
+      fetchSummary();
+      fetchMachineMatrix();
+    } else if (selectedTab === 'table') {
+      fetchTelemetry();
+    }
+    // Clear initialization for non-active tabs so they re-fetch when visited
+    initializedTabs.current = new Set([selectedTab]);
   };
 
   // Fetch spindle speed trend (last 24h by default)
@@ -231,12 +271,31 @@ function PublicAnalytics() {
     }
   };
 
+  // Track which tabs have been initialized to avoid redundant fetches
+  const initializedTabs = React.useRef(new Set());
+
+  // Lazy-load data per tab
   useEffect(() => {
-    fetchSummary();
-    fetchMachineMatrix();
-    // fetchTrend(); // commented out to save API calls
-    fetchTelemetry();
-    fetchPrograms();
+    if (selectedTab === 'summary' && !initializedTabs.current.has('summary')) {
+      initializedTabs.current.add('summary');
+      fetchSummary();
+      fetchMachineMatrix();
+    }
+    if (selectedTab === 'table' && !initializedTabs.current.has('table')) {
+      initializedTabs.current.add('table');
+      fetchTelemetry();
+    }
+    if ((selectedTab === 'programme' || selectedTab === 'tool') && !initializedTabs.current.has('programs')) {
+      initializedTabs.current.add('programs');
+      fetchPrograms();
+    }
+  }, [selectedTab]);
+
+  // Re-fetch table data when limit changes (only if table tab is active/initialized)
+  useEffect(() => {
+    if (initializedTabs.current.has('table')) {
+      fetchTelemetry();
+    }
   }, [limit]);
 
   /* ─── helper: format seconds to human readable ─── */
@@ -296,6 +355,9 @@ function PublicAnalytics() {
         </button>
         <button onClick={() => setSelectedTab('programme')} style={tabBtnStyle(selectedTab === 'programme')}>
           <FiPlay size={14} /> Programme Metrics
+        </button>
+        <button onClick={() => setSelectedTab('tool')} style={tabBtnStyle(selectedTab === 'tool')}>
+          <FiCpu size={14} /> Per-Tool Metrics
         </button>
         <button onClick={() => setSelectedTab('table')} style={tabBtnStyle(selectedTab === 'table')}>
           <FiList size={14} /> Data Table
@@ -776,6 +838,326 @@ function PublicAnalytics() {
               <FiActivity size={40} style={{ marginBottom: '1rem', opacity: 0.4 }} />
               <p style={{ margin: 0, fontWeight: 600, fontSize: '1rem' }}>Select a programme above to view per-run analytics</p>
               <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>Includes cycle time, intervention ratio, M00 stop time, utilisation, quote accuracy &amp; maturity curve</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ═══════════════════ PER-TOOL METRICS TAB ═══════════════════ */}
+      {selectedTab === 'tool' && (
+        <>
+          {/* Program and Run Selector */}
+          <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
+              <FiCpu color="#4a5568" />
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#4a5568', margin: 0 }}>Per-Tool Analytics</h3>
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Program Name</label>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    value={selectedProgram}
+                    onChange={e => setSelectedProgram(e.target.value)}
+                    style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '250px' }}
+                  >
+                    <option value="">-- Select a Programme --</option>
+                    {loadingPrograms ? (<option disabled>Loading...</option>) : (programs.map(p => (<option key={p} value={p}>{p}</option>)))}
+                  </select>
+                  <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
+                </div>
+              </div>
+
+              {toolMetricsData && toolMetricsData.totalRuns > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Run Number</label>
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      value={selectedToolRun}
+                      onChange={e => {
+                        setSelectedToolRun(e.target.value);
+                        fetchToolMetrics(selectedProgram, Number(e.target.value));
+                      }}
+                      style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '120px' }}
+                    >
+                      {Array.from({ length: toolMetricsData.totalRuns }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>Run #{i + 1}</option>
+                      ))}
+                    </select>
+                    <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => fetchToolMetrics(selectedProgram)}
+                disabled={!selectedProgram || loadingToolMetrics}
+                style={{ padding: '0.625rem 1.5rem', backgroundColor: selectedProgram ? 'var(--primary)' : '#cbd5e0', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: selectedProgram ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}
+              >
+                {loadingToolMetrics ? 'Loading...' : 'Analyse Tools'}
+              </button>
+            </div>
+          </div>
+
+          {loadingToolMetrics && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
+              <FiRefreshCw className="animate-spin" size={24} /> Analysing tools...
+            </div>
+          )}
+
+          {toolMetricsData && !loadingToolMetrics && (
+            <>
+              {toolMetricsData.toolMetrics && toolMetricsData.toolMetrics.length > 0 ? (
+                <>
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.25rem' }}>
+                      Programme Tools: <span style={{ color: 'var(--primary)' }}>{toolMetricsData.programName}</span>
+                    </h3>
+                    <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
+                      Selected Run: Run #{toolMetricsData.selectedRun} of {toolMetricsData.totalRuns}
+                    </p>
+                  </div>
+
+                  {/* Summary Table */}
+                  <div style={{ backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: '2rem' }}>
+                    <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#475569', margin: 0 }}>Tool Performance Summary</h4>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                          <tr>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Tool Name/Number</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Spindle Speed (Mean)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Feed Rate (Mean)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Spindle Load (Mean)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Spindle Load (Max)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Feed Override (Mean)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Override Events</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Tool Time (Est)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Alarms</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {toolMetricsData.toolMetrics.map(t => {
+                            const slMeanColor = t.flags.spindleLoadMeanFlag === 'RED' ? '#DC2626' : (t.flags.spindleLoadMeanFlag === 'AMBER' ? '#D97706' : '#16A34A');
+                            const slMeanBg = t.flags.spindleLoadMeanFlag === 'RED' ? '#FEE2E2' : (t.flags.spindleLoadMeanFlag === 'AMBER' ? '#FEF3C7' : '#DCFCE7');
+
+                            const slMaxColor = t.flags.spindleLoadMaxFlag === 'RED' ? '#DC2626' : '#16A34A';
+                            const slMaxBg = t.flags.spindleLoadMaxFlag === 'RED' ? '#FEE2E2' : '#DCFCE7';
+
+                            const foMeanColor = t.flags.feedOverrideMeanFlag === 'ORANGE' ? '#EA580C' : (t.flags.feedOverrideMeanFlag === 'RED' ? '#DC2626' : '#16A34A');
+                            const foMeanBg = t.flags.feedOverrideMeanFlag === 'ORANGE' ? '#FFEDD5' : (t.flags.feedOverrideMeanFlag === 'RED' ? '#FEE2E2' : '#DCFCE7');
+
+                            const ovEventsColor = t.flags.overrideEventsFlag === 'AMBER' ? '#D97706' : '#16A34A';
+                            const ovEventsBg = t.flags.overrideEventsFlag === 'AMBER' ? '#FEF3C7' : '#DCFCE7';
+
+                            const alarmColor = t.flags.alarmFlag === 'RED' ? '#DC2626' : '#16A34A';
+                            const alarmBg = t.flags.alarmFlag === 'RED' ? '#FEE2E2' : '#DCFCE7';
+
+                            return (
+                              <tr key={t.toolNumber} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '0.875rem 1.25rem', fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }}>
+                                  {t.toolName} (T{t.toolNumber})
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem' }}>
+                                  {t.actualSpindleSpeed > 0 ? `${t.actualSpindleSpeed} RPM` : '0 RPM'}
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem' }}>
+                                  {t.actualFeedRate > 0 ? `${t.actualFeedRate} mm/min` : '0 mm/min'}
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem' }}>
+                                  <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: slMeanColor, backgroundColor: slMeanBg }}>
+                                    {t.spindleLoadMean}%
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem' }}>
+                                  <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: slMaxColor, backgroundColor: slMaxBg }}>
+                                    {t.spindleLoadMax}%
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem' }}>
+                                  <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: foMeanColor, backgroundColor: foMeanBg }}>
+                                    {t.feedOverrideMean}%
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem' }}>
+                                  <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: ovEventsColor, backgroundColor: ovEventsBg }}>
+                                    {t.overrideEvents}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem' }}>
+                                  {formatDuration(t.actualToolTime)}
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem' }}>
+                                  <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: alarmColor, backgroundColor: alarmBg }}>
+                                    {t.alarmActiveCount} active
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Charts Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+                    
+                    {/* Actual Spindle Speed & Spindle Load */}
+                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#475569', marginBottom: '1.25rem' }}>Actual Spindle Speed per Tool</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={toolMetricsData.toolMetrics}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="toolName" tick={{ fontSize: 10, fill: '#64748b' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#64748b' }} label={{ value: 'RPM', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} />
+                          <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                          <Bar dataKey="actualSpindleSpeed" fill="#3B82F6" name="Spindle Speed (RPM)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#475569', marginBottom: '1.25rem' }}>Spindle Load (Mean vs Max)</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={toolMetricsData.toolMetrics}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="toolName" tick={{ fontSize: 10, fill: '#64748b' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#64748b' }} label={{ value: '% Load', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} />
+                          <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Bar dataKey="spindleLoadMean" fill="#10B981" name="Mean Load %" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="spindleLoadMax" fill="#EF4444" name="Max Load %" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Override Events & Diverging Bar */}
+                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#475569', marginBottom: '1.25rem' }}>Feed Override Events</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={toolMetricsData.toolMetrics}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="toolName" tick={{ fontSize: 10, fill: '#64748b' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#64748b' }} label={{ value: 'Events count', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} />
+                          <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                          <Bar dataKey="overrideEvents" fill="#F59E0B" name="Override Events" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#475569', marginBottom: '1.25rem' }}>Override Deviation (Above vs Below 100%)</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart
+                          data={toolMetricsData.toolMetrics.map(t => ({
+                            toolName: t.toolName,
+                            overrideAbove: t.overrideAbove,
+                            overrideBelow: -t.overrideBelow
+                          }))}
+                          stackOffset="sign"
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="toolName" tick={{ fontSize: 10, fill: '#64748b' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
+                          <Tooltip
+                            formatter={(value, name) => [Math.abs(value), name === 'overrideAbove' ? 'Above 100%' : 'Below 100%']}
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Bar dataKey="overrideAbove" fill="#EF4444" stackId="stack" name="Above 100%" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="overrideBelow" fill="#3B82F6" stackId="stack" name="Below 100%" radius={[0, 0, 4, 4]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Actual Tool Time & Cumulative Cutting Time */}
+                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#475569', marginBottom: '1.25rem' }}>Actual Tool Time (Est)</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={toolMetricsData.toolMetrics}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="toolName" tick={{ fontSize: 10, fill: '#64748b' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#64748b' }} label={{ value: 'Seconds', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} />
+                          <Tooltip formatter={(val) => [`${formatDuration(val)}`, 'Active Time']} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                          <Bar dataKey="actualToolTime" fill="#8B5CF6" name="Tool Time (s)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                        <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#475569', margin: 0 }}>Cumulative Cutting Time Trend</h4>
+                        {toolMetricsData.toolMetrics.some(t => t.cuttingTimeAllZero) && (
+                          <span style={{ fontSize: '0.65rem', color: '#EA580C', backgroundColor: '#FFEDD5', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>
+                            * Using production time (cutting time zero)
+                          </span>
+                        )}
+                      </div>
+                      <ResponsiveContainer width="100%" height={220}>
+                        {(() => {
+                          const runDataMap = {};
+                          const toolsList = toolMetricsData.toolMetrics;
+                          
+                          toolsList.forEach(t => {
+                            (t.cumulativeHistory || []).forEach(h => {
+                              if (!runDataMap[h.runNumber]) {
+                                runDataMap[h.runNumber] = { name: `Run ${h.runNumber}` };
+                              }
+                              runDataMap[h.runNumber][`tool_${t.toolNumber}`] = h.cuttingTime;
+                            });
+                          });
+
+                          const chartData = Object.values(runDataMap).sort((a, b) => {
+                            const numA = parseInt(a.name.split(' ')[1]);
+                            const numB = parseInt(b.name.split(' ')[1]);
+                            return numA - numB;
+                          });
+
+                          const colors = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B'];
+
+                          return (
+                            <LineChart data={chartData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} />
+                              <YAxis tick={{ fontSize: 10, fill: '#64748b' }} label={{ value: 'Seconds', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} />
+                              <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                              <Legend wrapperStyle={{ fontSize: 10 }} />
+                              {toolsList.map((t, idx) => (
+                                <Line
+                                  key={t.toolNumber}
+                                  type="monotone"
+                                  dataKey={`tool_${t.toolNumber}`}
+                                  stroke={colors[idx % colors.length]}
+                                  strokeWidth={2}
+                                  dot={{ r: 3 }}
+                                  name={`${t.toolName} (T${t.toolNumber})`}
+                                />
+                              ))}
+                            </LineChart>
+                          );
+                        })()}
+                      </ResponsiveContainer>
+                    </div>
+
+                  </div>
+                </>
+              ) : (
+                <div style={{ backgroundColor: 'white', padding: '3rem', borderRadius: '16px', textAlign: 'center', color: '#94a3b8' }}>
+                  <FiDatabase size={40} style={{ marginBottom: '1rem', opacity: 0.4 }} />
+                  <p style={{ margin: 0, fontWeight: 600 }}>No tool data found for this program run.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {!toolMetricsData && !loadingToolMetrics && (
+            <div style={{ backgroundColor: 'white', padding: '3rem', borderRadius: '16px', textAlign: 'center', color: '#94a3b8', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+              <FiCpu size={40} style={{ marginBottom: '1rem', opacity: 0.4 }} />
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '1rem' }}>Select a programme above to view per-tool analytics</p>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>Includes spindle speed, feed override, spindle loads, override deviation, active tool times &amp; cumulative cutting time</p>
             </div>
           )}
         </>
