@@ -15,7 +15,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/orders', label: 'All Orders', icon: <FiShoppingBag size={20} /> },
     { path: '/vendors', label: 'Vendor Management', icon: <FiPackage size={20} /> },
     { path: '/analytics', label: 'Analytics', icon: <FiTrendingUp size={20} /> },
-    { path: '/public/analytics', label: 'Public Analytics', icon: <FiBarChart size={20} /> },
+    { path: '/telemetry', label: 'Public Analytics', icon: <FiBarChart size={20} /> },
     { path: '/master-attributes', label: 'Master Attributes', icon: <FiSliders size={20} /> },
   ];
 
@@ -25,10 +25,10 @@ const Sidebar = ({ isOpen, onClose }) => {
         <div className="sidebar-header">
           <img src={process.env.PUBLIC_URL + '/logoimg.png'} alt="ShiaanX" className="sidebar-logo" />
         </div>
-        
+
         <nav className="sidebar-nav">
           {menuItems.map((item) => (
-            <div 
+            <div
               key={item.path}
               className={`nav-item ${location.pathname.startsWith(item.path) ? 'active' : ''}`}
               onClick={() => {

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FiActivity, FiRefreshCw, FiClock, FiDatabase, FiFilter, FiCalendar, FiCode, FiChevronDown } from 'react-icons/fi';
+import { FiActivity, FiRefreshCw, FiClock, FiDatabase, FiFilter, FiCalendar, FiCode, FiChevronDown, FiBarChart2, FiExternalLink } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 import telemetryService from '../services/telemetryService';
 import toast from 'react-hot-toast';
 
 function Telemetry() {
+  const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -231,7 +233,16 @@ function Telemetry() {
           <p style={{ color: '#718096', marginTop: '0.5rem' }}>Raw data from CNC machines via MQTT</p>
         </div>
         
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+                onClick={() => window.open('/#/public/analytics', '_blank')}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', backgroundColor: '#6d28d9', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 2px 8px rgba(109,40,217,0.25)', transition: 'background 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#5b21b6'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#6d28d9'}
+                title="Open public-facing analytics dashboard"
+            >
+                <FiBarChart2 size={16} /> View Public Analytics <FiExternalLink size={14} />
+            </button>
             <button 
                 className="btn-secondary" 
                 onClick={() => setIsMappingModalOpen(true)}

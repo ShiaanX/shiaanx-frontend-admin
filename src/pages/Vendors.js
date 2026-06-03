@@ -87,7 +87,7 @@ function Vendors() {
       </div>
 
       {/* Sidebar */}
-      <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+      {/* <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <img src={process.env.PUBLIC_URL + '/logoimg.png'} alt="ShiaanX" className="sidebar-logo" />
         </div>
@@ -123,7 +123,7 @@ function Vendors() {
             <span>Analytics</span>
           </div>
         </nav>
-      </div>
+      </div> */}
 
       {/* Overlay when sidebar is open */}
       {sidebarOpen && <div className="overlay" onClick={toggleSidebar}></div>}
@@ -162,13 +162,13 @@ function Vendors() {
                   <span>{vendor.rating}</span>
                 </div>
               </div>
-              
+
               <div className="vendor-info">
                 <p><strong>Specialization:</strong> {vendor.specialization}</p>
                 <p><strong>Email:</strong> {vendor.email}</p>
                 <p><strong>Phone:</strong> {vendor.phone}</p>
               </div>
-              
+
               <div className="vendor-stats-row">
                 <div className="stat-item">
                   <span className="stat-label">Active Orders</span>
@@ -179,7 +179,7 @@ function Vendors() {
                   <span className="stat-value">{vendor.completedOrders}</span>
                 </div>
               </div>
-              
+
               <div className="vendor-footer">
                 <span className={`status-badge ${vendor.status.toLowerCase()}`}>{vendor.status}</span>
                 <button className="edit-btn">

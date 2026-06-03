@@ -57,7 +57,7 @@ function PublicAnalytics() {
     startDate: '',
     endDate: '',
     programName: '',
-    range: '-2d'
+    range: '-30d'
   });
   const [limit, setLimit] = useState(100);
   const [programs, setPrograms] = useState([]);
@@ -196,16 +196,16 @@ function PublicAnalytics() {
   };
 
   const resetFilters = () => {
-    const defaultFilters = { startDate: '', endDate: '', programName: '', range: '-2d' };
+    const defaultFilters = { startDate: '', endDate: '', programName: '', range: '-30d' };
     setFilters(defaultFilters);
     setLimit(100);
     // Only refresh data for the active tab
     if (selectedTab === 'summary') {
-      const params = { range: '-2d' };
+      const params = { range: '-30d' };
       telemetryService.getAnalyticsSummary(params).then(res => setSummary(res.data || {}));
       telemetryService.getMachineMatrix(params).then(res => setMachineMatrix(res.data || []));
     } else if (selectedTab === 'table') {
-      telemetryService.getRawTelemetry({ limit: 100, range: '-2d' }).then(response => {
+      telemetryService.getRawTelemetry({ limit: 100, range: '-30d' }).then(response => {
         setRawData(response.data || []);
         setPagination(response.pagination || { nextCursor: null, hasNextPage: false });
       });
@@ -347,6 +347,64 @@ function PublicAnalytics() {
         <FiBarChart size={24} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
         Public Analytics
       </h2>
+
+      {/* ─── Global Filter Panel ─── */}
+      <div style={{ backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <FiFilter size={16} color="#718096" />
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#4a5568' }}>Filters</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Date Range</label>
+            <div style={{ position: 'relative' }}>
+
+              <select name="range" value={filters.range} onChange={handleFilterChange} style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '150px' }}>
+                <option value="-1h">Last 1 Hour</option>
+                <option value="-6h">Last 6 Hours</option>
+                <option value="-12h">Last 12 Hours</option>
+                <option value="-1d">Last 24 Hours</option>
+                <option value="-2d">Last 2 Days</option>
+                <option value="-7d">Last 7 Days</option>
+                <option value="-30d">Last 30 Days</option>
+                <option value="custom" disabled={filters.range !== 'custom'}>Custom Range</option>
+              </select>
+              <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Start Date/Time</label>
+            <input type="datetime-local" name="startDate" value={filters.startDate} onChange={handleFilterChange} style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>End Date/Time</label>
+            <input type="datetime-local" name="endDate" value={filters.endDate} onChange={handleFilterChange} style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Program Name</label>
+            <div style={{ position: 'relative' }}>
+              <select name="programName" value={filters.programName} onChange={handleFilterChange} style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '200px' }}>
+                <option value="">All Programs</option>
+                {loadingPrograms ? (<option disabled>Loading...</option>) : (programs.map(p => (<option key={p} value={p}>{p}</option>)))}
+              </select>
+              <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Records Limit</label>
+            <select value={limit} onChange={e => setLimit(Number(e.target.value))} style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', minWidth: '120px' }}>
+              <option value={50}>Latest 50</option>
+              <option value={100}>Latest 100</option>
+              <option value={500}>Latest 500</option>
+              <option value={1000}>Latest 1000</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button onClick={handleApplyFilters} style={{ padding: '0.625rem 1.5rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Apply Filters</button>
+            <button onClick={resetFilters} style={{ padding: '0.625rem 1rem', backgroundColor: 'transparent', color: '#718096', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Reset</button>
+          </div>
+        </div>
+      </div>
 
       {/* Tab bar */}
       <div className="tab-bar" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -929,11 +987,16 @@ function PublicAnalytics() {
                           <tr>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Tool Name/Number</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Spindle Speed (Mean)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Programmed Speed</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Speed Delta</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Feed Rate (Mean)</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Programmed Feed</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Feed Delta</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Spindle Load (Mean)</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Spindle Load (Max)</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Feed Override (Mean)</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Override Events</th>
+                            <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>M01 Stops</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Tool Time (Est)</th>
                             <th style={{ padding: '1rem 1.25rem', fontWeight: 700, color: '#4a5568', fontSize: '0.8rem' }}>Alarms</th>
                           </tr>
@@ -955,6 +1018,12 @@ function PublicAnalytics() {
                             const alarmColor = t.flags.alarmFlag === 'RED' ? '#DC2626' : '#16A34A';
                             const alarmBg = t.flags.alarmFlag === 'RED' ? '#FEE2E2' : '#DCFCE7';
 
+                            const speedDeltaColor = t.flags.speedDeltaFlag === 'RED' ? '#DC2626' : '#16A34A';
+                            const speedDeltaBg = t.flags.speedDeltaFlag === 'RED' ? '#FEE2E2' : '#DCFCE7';
+
+                            const feedDeltaColor = t.flags.feedDeltaFlag === 'ORANGE' ? '#EA580C' : '#16A34A';
+                            const feedDeltaBg = t.flags.feedDeltaFlag === 'ORANGE' ? '#FFEDD5' : '#DCFCE7';
+
                             return (
                               <tr key={t.toolNumber} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                 <td style={{ padding: '0.875rem 1.25rem', fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }}>
@@ -963,8 +1032,32 @@ function PublicAnalytics() {
                                 <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem' }}>
                                   {t.actualSpindleSpeed > 0 ? `${t.actualSpindleSpeed} RPM` : '0 RPM'}
                                 </td>
+                                <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>
+                                  {t.programmedSpindleSpeed !== null ? `${t.programmedSpindleSpeed} RPM` : '-'}
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem' }}>
+                                  {t.speedDelta !== null ? (
+                                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: speedDeltaColor, backgroundColor: speedDeltaBg }}>
+                                      {t.speedDelta > 0 ? `+${t.speedDelta}` : t.speedDelta} RPM
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>-</span>
+                                  )}
+                                </td>
                                 <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem' }}>
                                   {t.actualFeedRate > 0 ? `${t.actualFeedRate} mm/min` : '0 mm/min'}
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>
+                                  {t.programmedFeedRate !== null ? `${t.programmedFeedRate} mm/min` : '-'}
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem' }}>
+                                  {t.feedDelta !== null ? (
+                                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: feedDeltaColor, backgroundColor: feedDeltaBg }}>
+                                      {t.feedDelta > 0 ? `+${t.feedDelta}` : t.feedDelta} mm/min
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>-</span>
+                                  )}
                                 </td>
                                 <td style={{ padding: '0.875rem 1.25rem' }}>
                                   <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: slMeanColor, backgroundColor: slMeanBg }}>
@@ -985,6 +1078,9 @@ function PublicAnalytics() {
                                   <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, color: ovEventsColor, backgroundColor: ovEventsBg }}>
                                     {t.overrideEvents}
                                   </span>
+                                </td>
+                                <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>
+                                  {t.programmedM01Count} stops
                                 </td>
                                 <td style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem' }}>
                                   {formatDuration(t.actualToolTime)}
@@ -1166,63 +1262,6 @@ function PublicAnalytics() {
       {/* ═══════════════════ DATA TABLE TAB ═══════════════════ */}
       {selectedTab === 'table' && (
         <>
-          {/* Filter UI */}
-          <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
-              <FiFilter color="#4a5568" />
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#4a5568', margin: 0 }}>Filters</h3>
-            </div>
-            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Quick Range</label>
-                <div style={{ position: 'relative' }}>
-                  <select name="range" value={filters.range} onChange={handleFilterChange} style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '150px' }}>
-                    <option value="-1h">Last 1 Hour</option>
-                    <option value="-6h">Last 6 Hours</option>
-                    <option value="-12h">Last 12 Hours</option>
-                    <option value="-1d">Last 24 Hours</option>
-                    <option value="-2d">Last 2 Days</option>
-                    <option value="-7d">Last 7 Days</option>
-                    <option value="-30d">Last 30 Days</option>
-                    <option value="custom" disabled={filters.range !== 'custom'}>Custom Range</option>
-                  </select>
-                  <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Start Date/Time</label>
-                <input type="datetime-local" name="startDate" value={filters.startDate} onChange={handleFilterChange} style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>End Date/Time</label>
-                <input type="datetime-local" name="endDate" value={filters.endDate} onChange={handleFilterChange} style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Program Name</label>
-                <div style={{ position: 'relative' }}>
-                  <select name="programName" value={filters.programName} onChange={handleFilterChange} style={{ padding: '0.625rem 2.5rem 0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', appearance: 'none', backgroundColor: 'white', minWidth: '200px' }}>
-                    <option value="">All Programs</option>
-                    {loadingPrograms ? (<option disabled>Loading...</option>) : (programs.map(p => (<option key={p} value={p}>{p}</option>)))}
-                  </select>
-                  <FiChevronDown style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#a0aec0' }} />
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#718096' }}>Records Limit</label>
-                <select value={limit} onChange={e => setLimit(Number(e.target.value))} style={{ padding: '0.625rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', minWidth: '120px' }}>
-                  <option value={50}>Latest 50</option>
-                  <option value={100}>Latest 100</option>
-                  <option value={500}>Latest 500</option>
-                  <option value={1000}>Latest 1000</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button onClick={handleApplyFilters} style={{ padding: '0.625rem 1.5rem', backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Apply Filters</button>
-                <button onClick={resetFilters} style={{ padding: '0.625rem 1rem', backgroundColor: 'transparent', color: '#718096', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Reset</button>
-              </div>
-            </div>
-          </div>
-
           {/* Raw data table */}
           {loadingRaw ? (
             <div style={{ display: 'flex', alignItems: 'center' }}>

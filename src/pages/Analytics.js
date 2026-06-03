@@ -51,7 +51,7 @@ function Analytics() {
       </div>
 
       {/* Sidebar */}
-      <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+      {/* <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <img src={process.env.PUBLIC_URL + '/logoimg.png'} alt="ShiaanX" className="sidebar-logo" />
         </div>
@@ -87,7 +87,7 @@ function Analytics() {
             <span>Analytics</span>
           </div>
         </nav>
-      </div>
+      </div> */}
 
       {/* Overlay when sidebar is open */}
       {sidebarOpen && <div className="overlay" onClick={toggleSidebar}></div>}
