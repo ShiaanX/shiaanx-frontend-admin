@@ -235,7 +235,7 @@ function Telemetry() {
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <button
-                onClick={() => window.open('/#/public/analytics', '_blank')}
+                onClick={() => window.open(window.location.origin + window.location.pathname + '#/public/analytics', '_blank')}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', backgroundColor: '#6d28d9', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 2px 8px rgba(109,40,217,0.25)', transition: 'background 0.2s' }}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = '#5b21b6'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = '#6d28d9'}
