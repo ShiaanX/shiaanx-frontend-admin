@@ -167,6 +167,27 @@ const enquiryService = {
     } catch (error) {
       return { online: false };
     }
+  },
+
+  getAutoQuotePdfUrl: (pdfUrl) => {
+    return `${api.defaults.baseURL}${pdfUrl}`;
+  },
+
+  downloadAutoQuotePdf: async (pdfUrl, filename) => {
+    try {
+      const response = await api.get(pdfUrl, { responseType: 'blob' });
+      const blob = new Blob([response], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'program_sheet.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      throw error.response ? error.response.data : error;
+    }
   }
 };
 

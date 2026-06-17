@@ -604,9 +604,25 @@ const AutoQuoteModal = ({ enquiryId, part, onClose, onSave }) => {
         {/* Footer */}
         <footer className="aq-footer">
           <div className="aq-footer-left">
-            <button className="aq-btn aq-btn-ghost" onClick={handleGenerate} disabled={generating || !pipelineOnline}>
+            <button className="aq-btn aq-btn-ghost" onClick={handleGenerate} disabled={generating || !pipelineOnline} style={{ marginRight: 12 }}>
                <MdHistory /> Re-run Pipeline
             </button>
+            {S?.pdfUrl && (
+              <button 
+                onClick={async () => {
+                  try {
+                    const filename = S.pdfUrl.split('/').pop();
+                    await enquiryService.downloadAutoQuotePdf(S.pdfUrl, filename);
+                  } catch (err) {
+                    toast.error('Failed to download PDF');
+                  }
+                }}
+                className="aq-btn aq-btn-secondary" 
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 12, height: '36px', padding: '0 12px' }}
+              >
+                <MdSave /> Download Program Sheet
+              </button>
+            )}
             <span style={{ fontSize: '0.8rem', color: 'var(--aq-muted)' }}>
               Status: <strong style={{ color: status === 'FINALIZED' ? 'var(--aq-teal)' : 'var(--aq-amber)' }}>{status || 'DRAFT'}</strong>
             </span>
