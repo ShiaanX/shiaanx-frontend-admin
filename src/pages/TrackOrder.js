@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FiArrowLeft, FiClock, FiCheckCircle, FiEdit2, FiTruck, FiFileText, FiUpload, FiX, FiDownload, FiLoader } from 'react-icons/fi';
+import { FiArrowLeft, FiClock, FiCheckCircle, FiEdit2, FiTruck, FiFileText, FiUpload, FiX, FiDownload, FiLoader, FiEye } from 'react-icons/fi';
 import orderService from '../services/orderService';
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
@@ -69,6 +69,11 @@ function TrackOrder() {
       console.error('Download error:', err);
       window.open(filePath.startsWith('http') ? filePath : `${BASE_URL}/${filePath}`, '_blank');
     }
+  };
+
+  const handleView = (filePath) => {
+    const url = filePath.startsWith('http') ? filePath : `${BASE_URL}/${filePath}`;
+    window.open(url, '_blank');
   };
 
   const handleFileUpload = async (e) => {
@@ -200,13 +205,21 @@ function TrackOrder() {
                                               "{event.remarks}"
                                           </p>
                                       )}
-                                      <button 
-                                          className="blue-box" 
-                                          onClick={() => handleDownload(event.file_path, event.file_name)}
-                                          style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', border: 'none', background: '#f0fdf4', color: '#166534', fontWeight: 700, borderRadius: '8px' }}
-                                      >
-                                          <FiDownload size={14} /> Download Document ({(event.file_size_kb / 1024).toFixed(2)} MB)
-                                      </button>
+                                      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                                          <button 
+                                              onClick={() => handleView(event.file_path)}
+                                              style={{ padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', border: '1px solid #166534', background: 'white', color: '#166534', fontWeight: 700, borderRadius: '8px', outline: 'none' }}
+                                          >
+                                              <FiEye size={14} /> View
+                                          </button>
+                                          <button 
+                                              className="blue-box" 
+                                              onClick={() => handleDownload(event.file_path, event.file_name)}
+                                              style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', border: 'none', background: '#f0fdf4', color: '#166534', fontWeight: 700, borderRadius: '8px' }}
+                                          >
+                                              <FiDownload size={14} /> Download ({(event.file_size_kb / 1024).toFixed(2)} MB)
+                                          </button>
+                                      </div>
                                   </div>
                               )}
 

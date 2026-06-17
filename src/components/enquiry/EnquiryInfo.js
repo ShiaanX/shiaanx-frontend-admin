@@ -43,6 +43,29 @@ const EnquiryInfo = ({ data, onApprovePO, onRejectPO, onUpdateStatus }) => {
   const [quoteFile, setQuoteFile] = useState(null);
   const [isUploadingQuote, setIsUploadingQuote] = useState(false);
 
+  const handleDownload = async (filePath, fileName) => {
+    try {
+      const url = getFileUrl(filePath);
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName || filePath.split('/').pop();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Download error:', err);
+      window.open(getFileUrl(filePath), '_blank');
+    }
+  };
+
+  const handleView = (filePath) => {
+    window.open(getFileUrl(filePath), '_blank');
+  };
+
   // DFM Modal state
   const [isDfmModalOpen, setIsDfmModalOpen] = useState(false);
   const [dfmFiles, setDfmFiles] = useState([]);
@@ -687,7 +710,10 @@ const EnquiryInfo = ({ data, onApprovePO, onRejectPO, onUpdateStatus }) => {
                                               </p>
                                             </div>
                                           </div>
-                                          <a href={getFileUrl(doc.file_path)} target="_blank" rel="noreferrer" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '4px 8px', borderRadius: '4px' }}>DOWNLOAD</a>
+                                          <div style={{ display: 'flex', gap: '6px' }}>
+                                            <button onClick={() => handleView(doc.file_path)} style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', outline: 'none' }}>VIEW</button>
+                                            <a href="#download" onClick={(e) => { e.preventDefault(); handleDownload(doc.file_path, doc.file_name); }} style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '4px 8px', borderRadius: '4px', border: '1px solid #bfdbfe' }}>DOWNLOAD</a>
+                                          </div>
                                         </div>
                                       )) : (
                                         <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
@@ -829,9 +855,12 @@ const EnquiryInfo = ({ data, onApprovePO, onRejectPO, onUpdateStatus }) => {
                     {quotes.length > 0 ? (
                         <div className="uploaded-files-list">
                             {quotes.map((q, i) => (
-                                <div key={i} className="uploaded-file-item">
-                                    <span className="file-name">{q.file_name}</span>
-                                    <a href={getFileUrl(q.file_path)} target="_blank" rel="noreferrer" className="view-link">VIEW</a>
+                                <div key={i} className="uploaded-file-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                    <span className="file-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{q.file_name}</span>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button onClick={() => handleView(q.file_path)} className="view-link" style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', padding: 0, outline: 'none' }}>VIEW</button>
+                                        <a href="#download" onClick={(e) => { e.preventDefault(); handleDownload(q.file_path, q.file_name); }} className="view-link" style={{ textDecoration: 'none', color: '#16a34a', fontWeight: 600, fontSize: '0.8rem' }}>DOWNLOAD</a>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -928,26 +957,38 @@ const EnquiryInfo = ({ data, onApprovePO, onRejectPO, onUpdateStatus }) => {
                     <div className="dfm-entries-list">
                         {dfms.map((d, i) => (
                             <div key={i} className="dfm-entry">
-                                <div className="dfm-entry-header">
-                                    <span className="dfm-entry-label">Analysis #{i + 1}</span>
-                                    <a 
-                                        href={getFileUrl(d.file_path)} 
-                                        target="_blank" 
-                                        rel="noreferrer" 
-                                        className="view-link dfm"
-                                    >
-                                        {d.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                            <img 
-                                                src={getFileUrl(d.file_path)} 
-                                                alt={d.file_name}
-                                                style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
-                                            />
-                                        ) : 'OPEN FILE'}
-                                    </a>
+                                <div className="dfm-entry-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span className="dfm-entry-label">Analysis #{i + 1} ({d.file_name})</span>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <button 
+                                            onClick={() => handleView(d.file_path)} 
+                                            className="view-link dfm"
+                                            style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', padding: 0, outline: 'none' }}
+                                        >
+                                            VIEW
+                                        </button>
+                                        <a 
+                                            href="#download" 
+                                            onClick={(e) => { e.preventDefault(); handleDownload(d.file_path, d.file_name); }} 
+                                            className="view-link dfm"
+                                            style={{ textDecoration: 'none', color: '#16a34a', fontWeight: 600, fontSize: '0.8rem' }}
+                                        >
+                                            DOWNLOAD
+                                        </a>
+                                    </div>
                                 </div>
-                                {d.remarks && (
-                                    <p className="dfm-entry-remarks">{d.remarks}</p>
-                                )}
+                                <div style={{ marginTop: '8px' }}>
+                                    {d.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                                        <img 
+                                            src={getFileUrl(d.file_path)} 
+                                            alt={d.file_name}
+                                            style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0', display: 'block', marginBottom: '8px' }}
+                                        />
+                                    )}
+                                    {d.remarks && (
+                                        <p className="dfm-entry-remarks" style={{ margin: 0 }}>{d.remarks}</p>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -977,27 +1018,38 @@ const EnquiryInfo = ({ data, onApprovePO, onRejectPO, onUpdateStatus }) => {
                     <div className="dfm-entries-list">
                         {vendorDocs.map((d, i) => (
                             <div key={i} className="dfm-entry" style={{ background: '#f5f3ff', borderColor: '#ddd6fe' }}>
-                                <div className="dfm-entry-header">
+                                <div className="dfm-entry-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span className="dfm-entry-label" style={{ color: '#5b21b6' }}>Doc #{i + 1} ({d.file_name})</span>
-                                    <a 
-                                        href={getFileUrl(d.file_path)} 
-                                        target="_blank" 
-                                        rel="noreferrer" 
-                                        className="view-link"
-                                        style={{ color: '#7c3aed' }}
-                                    >
-                                        {d.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                                            <img 
-                                                src={getFileUrl(d.file_path)} 
-                                                alt={d.file_name}
-                                                style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
-                                            />
-                                        ) : 'VIEW'}
-                                    </a>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <button 
+                                            onClick={() => handleView(d.file_path)} 
+                                            className="view-link"
+                                            style={{ color: '#7c3aed', background: 'none', border: 'none', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', padding: 0, outline: 'none' }}
+                                        >
+                                            VIEW
+                                        </button>
+                                        <a 
+                                            href="#download" 
+                                            onClick={(e) => { e.preventDefault(); handleDownload(d.file_path, d.file_name); }} 
+                                            className="view-link"
+                                            style={{ color: '#16a34a', textDecoration: 'none', fontWeight: 600, fontSize: '0.8rem' }}
+                                        >
+                                            DOWNLOAD
+                                        </a>
+                                    </div>
                                 </div>
-                                {d.remarks && (
-                                    <p className="dfm-entry-remarks" style={{ borderLeftColor: '#8b5cf6' }}>{d.remarks}</p>
-                                )}
+                                <div style={{ marginTop: '8px' }}>
+                                    {d.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                                        <img 
+                                            src={getFileUrl(d.file_path)} 
+                                            alt={d.file_name}
+                                            style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0', display: 'block', marginBottom: '8px' }}
+                                        />
+                                    )}
+                                    {d.remarks && (
+                                        <p className="dfm-entry-remarks" style={{ borderLeftColor: '#8b5cf6', margin: 0 }}>{d.remarks}</p>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>

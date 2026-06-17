@@ -214,12 +214,15 @@ const EnquiryForm = ({
                 label="Assign to Customer"
                 name="customer_id"
                 value={formData.customer_id}
-                options={users.filter(u => u.role === 'CUSTOMER')}
+                options={users.filter(u => u.role === 'CUSTOMER').map(u => ({
+                    ...u,
+                    displayName: u.company_name ? `${u.company_name} - ${u.name}` : u.name
+                }))}
                 onChange={handleChange}
                 placeholder="Select Customer"
                 error={errors.customer_id}
                 isObject={true}
-                displayKey="name"
+                displayKey="displayName"
                 valueKey="id"
             />
         </div>

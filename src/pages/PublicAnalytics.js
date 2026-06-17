@@ -57,7 +57,7 @@ function PublicAnalytics() {
     startDate: '',
     endDate: '',
     programName: '',
-    range: '-30d'
+    range: '-7d'
   });
   const [limit, setLimit] = useState(100);
   const [programs, setPrograms] = useState([]);
@@ -196,7 +196,7 @@ function PublicAnalytics() {
   };
 
   const resetFilters = () => {
-    const defaultFilters = { startDate: '', endDate: '', programName: '', range: '-30d' };
+    const defaultFilters = { startDate: '', endDate: '', programName: '', range: '-7d' };
     setFilters(defaultFilters);
     setLimit(100);
     // Only refresh data for the active tab

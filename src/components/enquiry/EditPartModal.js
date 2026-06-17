@@ -134,6 +134,29 @@ const EditPartModal = ({ isOpen, onClose, enquiryId, part, onUpdate }) => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  const handleDownload = async (filePath, fileName) => {
+    try {
+      const url = getFullUrl(filePath);
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName || filePath.split('/').pop();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Download error:', err);
+      window.open(getFullUrl(filePath), '_blank');
+    }
+  };
+
+  const handleView = (filePath) => {
+    window.open(getFullUrl(filePath), '_blank');
+  };
+
   useEffect(() => {
     const fetchOptions = async () => {
       try {
@@ -404,7 +427,10 @@ const EditPartModal = ({ isOpen, onClose, enquiryId, part, onUpdate }) => {
                         <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--aq-muted)' }}>{new Date(doc.created_at || doc.createdAt).toLocaleDateString()} at {new Date(doc.created_at || doc.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                     </div>
-                    <a href={getFullUrl(doc.file_path)} target="_blank" rel="noreferrer" className="aq-btn aq-btn-ghost" style={{ fontSize: '0.7rem', padding: '4px 8px', border: 'none' }}>VIEW</a>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button onClick={() => handleView(doc.file_path)} className="aq-btn aq-btn-ghost" style={{ fontSize: '0.7rem', padding: '4px 8px', border: 'none', cursor: 'pointer', background: 'none' }}>VIEW</button>
+                      <button onClick={() => handleDownload(doc.file_path, doc.file_name)} className="aq-btn aq-btn-ghost" style={{ fontSize: '0.7rem', padding: '4px 8px', border: 'none', color: '#16a34a', cursor: 'pointer', background: 'none' }}>DOWNLOAD</button>
+                    </div>
                   </div>
                 ))}
                 {sortedDocs.length === 0 && (

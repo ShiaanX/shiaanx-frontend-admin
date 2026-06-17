@@ -142,11 +142,14 @@ const OrderForm = () => {
                             label="Customer"
                             name="customer_id"
                             value={formData.customer_id}
-                            options={customers}
+                            options={customers.map(c => ({
+                                ...c,
+                                displayName: c.company_name ? `${c.company_name} - ${c.name}` : c.name
+                            }))}
                             onChange={handleChange}
                             placeholder="Select Customer"
                             isObject={true}
-                            displayKey="name"
+                            displayKey="displayName"
                             valueKey="id"
                             disabled={isEditMode}
                         />

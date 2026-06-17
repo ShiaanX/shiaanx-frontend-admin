@@ -8,7 +8,7 @@ import '../styles/ViewDetails.css';
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-function FileUploadZone({ label, accentColor, bgColor, borderColor, onUpload, uploading, existingFiles, onDownload }) {
+function FileUploadZone({ label, accentColor, bgColor, borderColor, onUpload, uploading, existingFiles, onDownload, onView }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
@@ -29,19 +29,27 @@ function FileUploadZone({ label, accentColor, bgColor, borderColor, onUpload, up
         <div style={{ padding: '0.75rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderBottom: `1px solid ${borderColor}` }}>
           {existingFiles.map((doc, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', borderRadius: '8px', padding: '0.6rem 0.9rem', border: `1px solid ${borderColor}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden', marginRight: '0.5rem' }}>
                 <FiCheckCircle size={16} color={accentColor} />
                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {doc.file_name}
                 </span>
               </div>
-              <a
-                href="#download"
-                onClick={(e) => { e.preventDefault(); onDownload(doc.file_path, doc.file_name); }}
-                style={{ fontSize: '0.75rem', fontWeight: 700, color: accentColor, textDecoration: 'none', padding: '0.3rem 0.75rem', borderRadius: '6px', border: `1px solid ${accentColor}`, whiteSpace: 'nowrap', flexShrink: 0 }}
-              >
-                Download
-              </a>
+              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                <button
+                  onClick={() => onView(doc.file_path)}
+                  style={{ fontSize: '0.75rem', fontWeight: 700, color: accentColor, padding: '0.3rem 0.75rem', borderRadius: '6px', border: `1px solid ${accentColor}`, backgroundColor: 'white', whiteSpace: 'nowrap', cursor: 'pointer', outline: 'none' }}
+                >
+                  View
+                </button>
+                <a
+                  href="#download"
+                  onClick={(e) => { e.preventDefault(); onDownload(doc.file_path, doc.file_name); }}
+                  style={{ fontSize: '0.75rem', fontWeight: 700, color: 'white', backgroundColor: accentColor, textDecoration: 'none', padding: '0.3rem 0.75rem', borderRadius: '6px', border: `1px solid ${accentColor}`, whiteSpace: 'nowrap' }}
+                >
+                  Download
+                </a>
+              </div>
             </div>
           ))}
         </div>
@@ -158,6 +166,11 @@ function ViewDetails() {
       console.error('Download error:', err);
       window.open(filePath.startsWith('http') ? filePath : `${BASE_URL}/${filePath}`, '_blank');
     }
+  };
+
+  const handleView = (filePath) => {
+    const url = filePath.startsWith('http') ? filePath : `${BASE_URL}/${filePath}`;
+    window.open(url, '_blank');
   };
 
   if (loading) return <div style={{ padding: '2rem' }}>Loading order details...</div>;
@@ -286,6 +299,7 @@ function ViewDetails() {
               uploading={uploadingCam}
               existingFiles={camFiles}
               onDownload={handleDownload}
+              onView={handleView}
             />
           </div>
 
@@ -300,6 +314,7 @@ function ViewDetails() {
               uploading={uploadingQc}
               existingFiles={qcFiles}
               onDownload={handleDownload}
+              onView={handleView}
             />
           </div>
 
@@ -310,16 +325,30 @@ function ViewDetails() {
               {enquiryDocs.length > 0 ? (
                 enquiryDocs.map((doc, index) => (
                   <div key={index} style={{ padding: '0.75rem 1rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
-                      <div style={{ padding: '0.5rem', backgroundColor: 'var(--background)', borderRadius: '6px', color: 'var(--primary)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden', marginRight: '0.5rem' }}>
+                      <div style={{ padding: '0.5rem', backgroundColor: 'var(--background)', borderRadius: '6px', color: 'var(--primary)', flexShrink: 0 }}>
                         <FiFileText size={18} />
                       </div>
                       <div style={{ overflow: 'hidden' }}>
                         <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.file_name}</div>
-                        {doc.uploader && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>by {doc.uploader.name}</div>}
+                        {doc.uploader && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>by {doc.uploader.name}</div>}
                       </div>
                     </div>
-                    <a href="#download" onClick={(e) => { e.preventDefault(); handleDownload(doc.file_path, doc.file_name); }} style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none', padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--primary)', whiteSpace: 'nowrap' }}>Download</a>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                      <button 
+                        onClick={() => handleView(doc.file_path)} 
+                        style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)', padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--primary)', backgroundColor: 'white', whiteSpace: 'nowrap', cursor: 'pointer', outline: 'none' }}
+                      >
+                        View
+                      </button>
+                      <a 
+                        href="#download" 
+                        onClick={(e) => { e.preventDefault(); handleDownload(doc.file_path, doc.file_name); }} 
+                        style={{ fontSize: '0.8rem', fontWeight: 700, color: 'white', backgroundColor: 'var(--primary)', textDecoration: 'none', padding: '0.4rem 0.8rem', borderRadius: '6px', border: '1px solid var(--primary)', whiteSpace: 'nowrap' }}
+                      >
+                        Download
+                      </a>
+                    </div>
                   </div>
                 ))
               ) : (
