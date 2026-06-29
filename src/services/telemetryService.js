@@ -13,6 +13,12 @@ const telemetryService = {
   getProgramMetrics: async (params = {}) => api.get('/public/telemetry/analytics/program-metrics', { params }),
   getToolMetrics: async (params = {}) => api.get('/public/telemetry/analytics/tool-metrics', { params }),
   getPrograms: async () => api.get('/public/telemetry/programs'),
+  
+  // Test Telemetry & Mappings
+  getRawTestTelemetry: async (params = {}) => api.get('/admin/telemetry/test/raw', { params }),
+  getMappings: async () => api.get('/admin/telemetry/mappings'),
+  upsertMapping: async (data) => api.post('/admin/telemetry/mappings', data),
+  deleteMapping: async (id) => api.delete(`/admin/telemetry/mappings/${id}`),
 };
 
 export default telemetryService;

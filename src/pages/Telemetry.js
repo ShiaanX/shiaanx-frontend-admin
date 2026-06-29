@@ -23,12 +23,14 @@ function Telemetry() {
     range: '-2d'
   });
 
+  const [telemetrySource, setTelemetrySource] = useState('influx'); // 'influx' or 'postgres'
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   const [mappings, setMappings] = useState([]);
   const [mappingForm, setMappingForm] = useState({ program: '', toolNumber: '', toolName: '' });
   const [isSavingMapping, setIsSavingMapping] = useState(false);
 
-  const fetchTelemetry = async (cursor = null) => {
+  const fetchTelemetry = async (cursor = null, sourceOverride = null) => {
+    const currentSource = sourceOverride || telemetrySource;
     try {
       // Ignore event objects passed accidentally via onClick
       const actualCursor = (cursor && typeof cursor !== 'object') ? String(cursor) : null;
@@ -40,7 +42,6 @@ function Telemetry() {
       }
 
       const params = { limit };
-      if (actualCursor) params.cursor = actualCursor;
       
       // Only send range if no specific dates are selected
       if (filters.startDate || filters.endDate) {
@@ -54,15 +55,44 @@ function Telemetry() {
         params.programName = filters.programName;
       }
 
-      const response = await telemetryService.getRawTelemetry(params);
-      
-      if (isLoadMore) {
-        setData(prev => [...prev, ...(response.data || [])]);
-      } else {
-        setData(response.data || []);
-      }
+      if (currentSource === 'postgres') {
+        params.page = actualCursor ? parseInt(actualCursor, 10) : 1;
+        const response = await telemetryService.getRawTestTelemetry(params);
+        
+        // Flatten row.data (JSONB) on-the-fly
+        const flattenedRows = (response.data || []).map(row => ({
+          _time: row.timestamp,
+          factory_id: row.factory_id,
+          machine_id: row.machine_id,
+          record_index: row.record_index,
+          ...row.data
+        }));
 
-      setPagination(response.pagination || { nextCursor: null, hasNextPage: false });
+        if (isLoadMore) {
+          setData(prev => [...prev, ...flattenedRows]);
+        } else {
+          setData(flattenedRows);
+        }
+
+        const currentPage = response.pagination?.currentPage || 1;
+        const totalPages = response.pagination?.totalPages || 1;
+        
+        setPagination({
+          nextCursor: currentPage < totalPages ? String(currentPage + 1) : null,
+          hasNextPage: currentPage < totalPages
+        });
+      } else {
+        if (actualCursor) params.cursor = actualCursor;
+        const response = await telemetryService.getRawTelemetry(params);
+        
+        if (isLoadMore) {
+          setData(prev => [...prev, ...(response.data || [])]);
+        } else {
+          setData(response.data || []);
+        }
+
+        setPagination(response.pagination || { nextCursor: null, hasNextPage: false });
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to fetch telemetry data');
     } finally {
@@ -155,7 +185,7 @@ function Telemetry() {
     fetchTelemetry();
     fetchPrograms();
     fetchMappings();
-  }, [limit]); // Fetch on limit change
+  }, [limit, telemetrySource]); // Fetch on limit or source change
 
   const columns = React.useMemo(() => {
     if (!data || data.length === 0) return [];
@@ -231,6 +261,20 @@ function Telemetry() {
             <FiActivity color="var(--primary)" /> Machine Telemetry
           </h1>
           <p style={{ color: '#718096', marginTop: '0.5rem' }}>Raw data from CNC machines via MQTT</p>
+          <div style={{ display: 'flex', gap: '0.5rem', backgroundColor: '#edf2f7', padding: '0.25rem', borderRadius: '8px', marginTop: '1.25rem', width: 'fit-content' }}>
+            <button 
+              onClick={() => { setTelemetrySource('influx'); setData([]); }}
+              style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', transition: 'all 0.2s', backgroundColor: telemetrySource === 'influx' ? 'white' : 'transparent', color: telemetrySource === 'influx' ? 'var(--primary)' : '#4a5568', boxShadow: telemetrySource === 'influx' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+            >
+              Live InfluxDB Data
+            </button>
+            <button 
+              onClick={() => { setTelemetrySource('postgres'); setData([]); }}
+              style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', transition: 'all 0.2s', backgroundColor: telemetrySource === 'postgres' ? 'white' : 'transparent', color: telemetrySource === 'postgres' ? 'var(--primary)' : '#4a5568', boxShadow: telemetrySource === 'postgres' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+            >
+              Postgres Test Data
+            </button>
+          </div>
         </div>
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -480,7 +524,7 @@ function Telemetry() {
               <div style={{ padding: '0.75rem', backgroundColor: '#f0fff4', color: '#38a169', borderRadius: '12px' }}><FiDatabase size={20}/></div>
               <div>
                   <span style={{ display: 'block', fontSize: '0.875rem', color: '#718096' }}>Storage</span>
-                  <span style={{ fontWeight: 700 }}>InfluxDB</span>
+                  <span style={{ fontWeight: 700 }}>{telemetrySource === 'postgres' ? 'PostgreSQL' : 'InfluxDB'}</span>
               </div>
           </div>
           <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -511,7 +555,7 @@ function Telemetry() {
                   <td colSpan={columns.length + 1} style={{ textAlign: 'center', padding: '4rem', color: '#718096' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
                           <FiRefreshCw className="animate-spin" size={32} />
-                          <span>Loading telemetry data from InfluxDB...</span>
+                          <span>Loading telemetry data from {telemetrySource === 'postgres' ? 'PostgreSQL' : 'InfluxDB'}...</span>
                       </div>
                   </td>
                 </tr>
