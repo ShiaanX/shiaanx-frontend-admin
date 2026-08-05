@@ -596,8 +596,6 @@ const AutoQuoteModal = ({ enquiryId, part, onClose, onSave }) => {
                 </div>
               </div>
             )}
-
-            )}
           </main>
         </div>
 
