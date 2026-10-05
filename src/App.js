@@ -24,6 +24,7 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 
 import TelemetryAnalyticsPublic from './pages/TelemetryAnalyticsPublic';
 import PublicAnalytics from './pages/PublicAnalytics';
+import ProtoApp from './proto/ProtoApp';
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
           {/* <Route path="/dashboard-reference" element={<TelemetryReference />} /> */}
           <Route path="/telemetry-public" element={<TelemetryAnalyticsPublic />} />
           <Route path="/public/analytics" element={<PublicAnalytics />} />
+          <Route path="/proto/*" element={<ProtoApp />} />
           <Route
             element={
               <ProtectedRoute>

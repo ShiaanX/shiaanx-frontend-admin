@@ -1,0 +1,262 @@
+/* Admin-flow preview styles. Scoped under .proto-app so nothing here can leak into the live app,
+   and nothing from the live app's CSS files can leak in here either. Same tokens as Orders.css /
+   Enquiries.css (#2160b7 / #e0edff / Inter) so it reads as this app. */
+.proto-app {
+  --primary: #2160b7;
+  --primary-dark: #1a4d94;
+  --primary-light: #e0edff;
+  --shell-bg: #e0edff;
+  --card-bg: #ffffff;
+  --sidebar-bg: #ffffff;
+  --ink: #1e293b;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --ok: #10b981; --ok-bg: #d4edda; --ok-ink: #155724;
+  --warn: #f59e0b; --warn-bg: #fff3cd; --warn-ink: #856404;
+  --error: #ef4444; --error-bg: #f8d7da; --error-ink: #721c24;
+  --info-bg: #d1ecf1; --info-ink: #0c5460;
+  --shadow: 0 2px 10px rgba(0,0,0,.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.08), 0 4px 6px -4px rgba(0,0,0,.08);
+  min-height: 100vh;
+  background: var(--shell-bg);
+  color: var(--ink);
+  font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+}
+.proto-app * { box-sizing: border-box; }
+.proto-app button, .proto-app input, .proto-app select, .proto-app textarea { font: inherit; letter-spacing: inherit; }
+.proto-app svg.icon { flex-shrink: 0; }
+
+/* The live app's stylesheets style bare elements (select with !important in TrackOrder.css; label,
+   h1, p, th, td elsewhere), and CRA bundles every stylesheet onto every page. Undo those here. */
+.proto-app select {
+  padding: 0 34px 0 12px !important; border: 1px solid var(--border) !important; font-weight: 500 !important;
+  font-size: 13px !important; color: var(--ink) !important; background-color: var(--card-bg) !important;
+  background-size: 1rem; background-position: right .6rem center; min-height: 36px;
+}
+.proto-app label { margin: 0; }
+.proto-app h1, .proto-app h2, .proto-app h3 { color: var(--ink); }
+.proto-app p { color: inherit; }
+.proto-app table.data th { background: none; }
+.proto-app table.data td { color: inherit; border-top: 0; font-size: inherit; }
+
+.proto-app.app-grid { display: grid; grid-template-columns: 66px minmax(0,1fr); min-height: 100vh; }
+.proto-app.app-grid.nav-open { grid-template-columns: 236px minmax(0,1fr); }
+
+.proto-app .px-sidebar { background: var(--sidebar-bg); border-right: 1px solid var(--border); overflow: hidden; }
+.proto-app .sidebar-top { height: 60px; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--border); gap: 10px; }
+.proto-app .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+.proto-app .brand-name { font-weight: 800; font-size: 15px; white-space: nowrap; opacity: 0; transition: opacity .15s; }
+.proto-app.nav-open .brand-name { opacity: 1; }
+.proto-app .nav-list { padding: 10px 0; }
+.proto-app .px-nav-item { display: flex; align-items: center; gap: 18px; padding: 11px 23px; color: var(--muted); cursor: pointer; white-space: nowrap; border-left: 3px solid transparent; text-decoration: none; }
+.proto-app .px-nav-item:hover { background: var(--primary-light); color: var(--primary); }
+.proto-app .px-nav-item.active { background: var(--primary-light); color: var(--primary); border-left-color: var(--primary); font-weight: 600; }
+.proto-app .nav-label { opacity: 0; transition: opacity .15s; font-size: 13.5px; }
+.proto-app.nav-open .nav-label { opacity: 1; }
+.proto-app .nav-divider { height: 1px; background: var(--border); margin: 10px 18px; }
+.proto-app .nav-foot { padding: 10px 23px; display: flex; align-items: center; gap: 18px; color: var(--muted); cursor: pointer; border: 0; background: none; width: 100%; text-align: left; }
+
+.proto-app .shell { min-width: 0; display: flex; flex-direction: column; }
+.proto-app .px-topbar { height: 60px; background: var(--card-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; padding: 0 20px; position: sticky; top: 0; z-index: 10; }
+.proto-app button.px-icon-btn { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 8px; border-radius: 8px; display: grid; place-items: center; }
+.proto-app button.px-icon-btn:hover { background: var(--primary-light); color: var(--primary); }
+.proto-app .crumb { font-size: 13px; color: var(--muted); }
+.proto-app .crumb b { color: var(--ink); font-weight: 600; }
+.proto-app .topbar-spacer { flex: 1; }
+.proto-app .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+.proto-app .preview-flag { font: 700 10px/1 'Inter', sans-serif; letter-spacing: .04em; text-transform: uppercase; background: var(--warn-bg); color: var(--warn-ink); padding: 4px 9px; border-radius: 20px; }
+
+.proto-app main { flex: 1; min-width: 0; padding: 26px 28px 60px; max-width: 1280px; width: 100%; margin: 0 auto; }
+
+.proto-app .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+.proto-app .page-head h1 { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.proto-app h3 { margin: 26px 0 12px; font-size: 15px; font-weight: 700; }
+.proto-app .page-sub { color: var(--muted); font-size: 13.5px; }
+.proto-app .head-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.proto-app .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 9px; font-weight: 600; font-size: 13.5px; cursor: pointer; border: 1px solid transparent; }
+.proto-app .px-btn-primary { background: var(--primary); color: #fff; }
+.proto-app .px-btn-primary:hover { background: var(--primary-dark); }
+.proto-app .btn-ghost { background: var(--card-bg); color: var(--primary); border-color: var(--primary); }
+.proto-app .btn-ghost:hover { background: var(--primary-light); }
+.proto-app .btn-text { background: none; border: none; color: var(--primary); font-weight: 600; cursor: pointer; padding: 6px 2px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+
+.proto-app .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.proto-app .px-stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 13px; padding: 16px 18px; box-shadow: var(--shadow); }
+.proto-app .px-stat-card .n { font-size: 24px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.proto-app .px-stat-card .l { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.proto-app .px-stat-card.accent .n { color: var(--primary); }
+
+.proto-app .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.proto-app .search { flex: 1; min-width: 180px; display: flex; align-items: center; gap: 10px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 11px; padding: 10px 16px; }
+.proto-app .search input { border: none; outline: none; background: none; color: var(--ink); width: 100%; }
+.proto-app .search svg { color: var(--muted); }
+.proto-app .filter-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.proto-app .pill { padding: 8px 15px; border-radius: 20px; border: 1px solid var(--primary); background: var(--card-bg); color: var(--primary); font-weight: 600; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.proto-app .pill.active { background: var(--primary); color: #fff; }
+
+.proto-app .period-ctrl { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.proto-app .period-label { font-size: 12px; color: var(--muted); }
+.proto-app .period-ctrl select, .proto-app .period-ctrl input[type=date] { border: 1px solid var(--border); background: var(--card-bg); color: var(--ink); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; }
+.proto-app .head-actions select { height: 40px; border: 1px solid var(--border); border-radius: 9px; padding: 0 12px; background: var(--card-bg); color: var(--ink); }
+
+.proto-app .tablecard { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 20px; }
+.proto-app table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.proto-app table.data th { text-align: left; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 13px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.proto-app table.data td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.proto-app table.data tbody tr:last-child td { border-bottom: 0; }
+.proto-app table.data tbody tr:hover { background: var(--primary-light); }
+.proto-app .rowlink { cursor: pointer; }
+.proto-app .mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 12.5px; }
+.proto-app .cell-primary { font-weight: 700; }
+.proto-app .cell-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.proto-app .overflow-x { overflow-x: auto; }
+
+.proto-app .badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; }
+.proto-app .b-pending { background: var(--warn-bg); color: var(--warn-ink); }
+.proto-app .b-quoted { background: var(--info-bg); color: var(--info-ink); }
+.proto-app .b-ordered, .proto-app .b-production, .proto-app .b-inprogress { background: var(--primary-light); color: var(--primary); }
+.proto-app .b-done, .proto-app .b-pass, .proto-app .b-delivered { background: var(--ok-bg); color: var(--ok-ink); }
+.proto-app .b-fail, .proto-app .b-cancelled, .proto-app .b-ncr { background: var(--error-bg); color: var(--error-ink); }
+.proto-app .b-near { background: var(--warn-bg); color: var(--warn-ink); }
+.proto-app .b-neutral { background: var(--border); color: var(--muted); }
+.proto-app .order-yes { color: var(--ok-ink); font-weight: 700; }
+.proto-app .order-no { color: var(--muted); }
+
+.proto-app .detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
+.proto-app .detail-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.proto-app .detail-title .b-inprogress { background: var(--card-bg); }
+.proto-app .detail-title h1 { margin: 0; font-size: 24px; font-weight: 800; }
+.proto-app .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; margin-bottom: 14px; background: none; border: 0; padding: 0; }
+.proto-app .back-link:hover { color: var(--primary); }
+
+.proto-app .grid2 { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 20px; align-items: start; }
+.proto-app .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; box-shadow: var(--shadow); margin-bottom: 20px; }
+.proto-app .card h2 { margin: 0 0 14px; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+.proto-app .card h2 svg { color: var(--primary); }
+.proto-app .kv { display: grid; grid-template-columns: 130px minmax(0,1fr); gap: 8px 14px; font-size: 13.5px; }
+.proto-app .kv.wide { grid-template-columns: 120px minmax(0,1fr); }
+.proto-app .kv dt { color: var(--muted); }
+.proto-app .kv dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+
+.proto-app .part-row { border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }
+.proto-app .part-row:last-child { margin-bottom: 0; }
+.proto-app .part-row-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.proto-app .part-row-head .name { font-weight: 700; font-size: 14.5px; }
+.proto-app .mini-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(130px,1fr)); gap: 10px 18px; font-size: 12.5px; }
+.proto-app .mini-grid .ml { color: var(--muted); display: block; margin-bottom: 2px; }
+.proto-app .mini-grid .mv { font-weight: 600; }
+
+.proto-app .doc-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.proto-app .doc-row:last-child { border-bottom: 0; }
+.proto-app .doc-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--primary-light); color: var(--primary); display: grid; place-items: center; flex-shrink: 0; }
+.proto-app .doc-name { font-weight: 600; font-size: 13px; }
+.proto-app .doc-sub { color: var(--muted); font-size: 11.5px; }
+.proto-app .doc-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.proto-app .toggle { position: relative; width: 38px; height: 21px; border-radius: 20px; background: var(--border); cursor: pointer; flex-shrink: 0; transition: background .15s; border: 0; padding: 0; }
+.proto-app .toggle::after { content: ''; position: absolute; width: 17px; height: 17px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.proto-app .toggle.on { background: var(--ok); }
+.proto-app .toggle.on::after { left: 19px; }
+.proto-app .toggle-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+.proto-app .timeline { position: relative; padding-left: 22px; }
+.proto-app .timeline::before { content: ''; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--border); }
+.proto-app .tl-item { position: relative; padding-bottom: 16px; }
+.proto-app .tl-item:last-child { padding-bottom: 0; }
+.proto-app .tl-item::before { content: ''; position: absolute; left: -22px; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 2px solid var(--card-bg); box-shadow: 0 0 0 2px var(--primary); }
+.proto-app .tl-item.future::before { background: var(--border); box-shadow: 0 0 0 2px var(--border); }
+.proto-app .tl-item.future { color: var(--muted); }
+.proto-app .tl-t { font-weight: 600; font-size: 13px; }
+.proto-app .tl-d { font-size: 11.5px; color: var(--muted); }
+
+.proto-app .kpi-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.proto-app .kpi { flex: 1; min-width: 100px; text-align: center; padding: 12px; border-radius: 10px; background: var(--shell-bg); }
+.proto-app .kpi .n { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.proto-app .kpi .l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+.proto-app .kpi.ok .n { color: var(--ok-ink); } .proto-app .kpi.warn .n { color: var(--warn-ink); } .proto-app .kpi.err .n { color: var(--error-ink); }
+
+.proto-app .dim-list { display: flex; flex-direction: column; gap: 1px; background: var(--border); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.proto-app .dim-row { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: 12px; align-items: center; background: var(--card-bg); padding: 10px 14px; font-size: 12.5px; }
+.proto-app .dim-ball { width: 22px; height: 22px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 10.5px; }
+.proto-app .dim-ball.pass { background: var(--ok); } .proto-app .dim-ball.near { background: var(--warn); } .proto-app .dim-ball.fail { background: var(--error); }
+.proto-app .dim-main b { font-size: 12.5px; } .proto-app .dim-main span { display: block; color: var(--muted); font-size: 11px; }
+
+.proto-app .board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+.proto-app .board-col { background: var(--card-bg); border: 1px solid var(--border); border-radius: 13px; min-width: 220px; }
+.proto-app .board-col-head { padding: 13px 15px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 12.5px; display: flex; justify-content: space-between; align-items: center; }
+.proto-app .board-col-head .count { background: var(--shell-bg); color: var(--muted); border-radius: 20px; padding: 1px 9px; font-size: 11px; font-weight: 700; }
+.proto-app .board-col-body { padding: 10px; display: flex; flex-direction: column; gap: 9px; min-height: 60px; }
+.proto-app .job-card { background: var(--shell-bg); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; cursor: pointer; }
+.proto-app .job-card:hover { border-color: var(--primary); }
+.proto-app .job-card .jn { font-weight: 700; font-size: 12.5px; }
+.proto-app .job-card .jm { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.proto-app .job-card .jt { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+.proto-app .tag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--card-bg); color: var(--muted); border: 1px solid var(--border); }
+.proto-app .tag.inhouse { color: var(--primary); border-color: var(--primary); }
+.proto-app .tag.partner { color: var(--warn-ink); border-color: var(--warn); }
+.proto-app .tag.src-ai { color: #7c3aed; border-color: #7c3aed; }
+.proto-app .tag.src-human { color: var(--primary); border-color: var(--primary); }
+.proto-app .tag.src-tech { color: #0d9488; border-color: #0d9488; }
+
+.proto-app .viewer-shell { background: #11161f; border-radius: 13px; aspect-ratio: 16/10; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.proto-app .viewer-shell svg.part3d { width: 46%; opacity: .92; }
+.proto-app .viewer-chip { position: absolute; top: 12px; left: 12px; background: rgba(255,255,255,.08); color: #cfe0ef; font-size: 11px; padding: 5px 11px; border-radius: 7px; font-family: ui-monospace,monospace; }
+.proto-app .viewer-tools { position: absolute; bottom: 12px; left: 12px; right: 12px; display: flex; gap: 8px; }
+.proto-app .viewer-tools button { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: #cfe0ef; padding: 7px 12px; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; }
+
+.proto-app .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; overflow-x: auto; }
+.proto-app .tab { padding: 11px 16px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; background: none; border-left: 0; border-right: 0; border-top: 0; }
+.proto-app .tab:hover:not(:disabled) { color: var(--primary); }
+.proto-app .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.proto-app .tab:disabled { opacity: .4; cursor: default; }
+
+.proto-app .stub-note { display: flex; gap: 10px; align-items: flex-start; background: var(--primary-light); border-radius: 11px; padding: 13px 16px; font-size: 12.5px; color: var(--ink); margin-bottom: 18px; }
+.proto-app .stub-note svg { color: var(--primary); flex-shrink: 0; margin-top: 1px; }
+.proto-app .empty-hint { text-align: center; padding: 30px 14px; color: var(--muted); font-size: 12.5px; }
+
+.proto-app .px-modal-overlay { position: fixed; inset: 0; background: rgba(15,21,34,.5); display: flex; align-items: center; justify-content: center; z-index: 500; padding: 20px; }
+.proto-app .modal-panel { background: var(--card-bg); border-radius: 16px; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+.proto-app .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--border); }
+.proto-app .modal-head h2 { margin: 0; font-size: 16px; font-weight: 800; }
+.proto-app .modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+.proto-app .field { display: flex; flex-direction: column; gap: 6px; }
+.proto-app .field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.proto-app .field input, .proto-app .field select, .proto-app .field textarea { border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; background: var(--shell-bg); color: var(--ink); width: 100%; }
+.proto-app .field textarea { resize: vertical; min-height: 64px; }
+.proto-app .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.proto-app .modal-foot { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+.proto-app .inline-add { border: 1px dashed var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+.proto-app .dl-link { display: inline-flex; align-items: center; gap: 5px; color: var(--primary); font-weight: 600; cursor: pointer; text-decoration: none; background: none; border: 0; padding: 0; font-size: inherit; }
+.proto-app .dl-link:hover { text-decoration: underline; }
+.proto-app .dl-link svg { width: 13px; height: 13px; }
+
+.proto-app .artifact-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.proto-app .artifact-row:last-child { border-bottom: 0; }
+.proto-app .art-main { flex: 1; min-width: 0; }
+.proto-app .art-name { font-weight: 600; font-size: 13px; }
+.proto-app .art-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.proto-app .art-status { font-size: 11.5px; color: var(--muted); }
+.proto-app .art-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.proto-app .btn-sm { font-size: 11.5px; padding: 6px 13px; border-radius: 7px; font-weight: 700; cursor: pointer; white-space: nowrap; border: 1px solid transparent; }
+.proto-app .btn-sm.primary { background: var(--primary); color: #fff; }
+.proto-app .btn-sm.ghost { background: transparent; color: var(--primary); border-color: var(--primary); }
+.proto-app .btn-sm.text { background: none; color: var(--muted); font-weight: 600; }
+.proto-app .btn-sm.text:hover { color: var(--primary); }
+
+@media (max-width: 860px) {
+  .proto-app .grid2 { grid-template-columns: minmax(0,1fr); }
+  .proto-app .board { grid-template-columns: repeat(5, 200px); }
+}
+@media (max-width: 640px) {
+  .proto-app main { padding: 18px 14px 50px; }
+  .proto-app.app-grid, .proto-app.app-grid.nav-open { grid-template-columns: 56px minmax(0,1fr); }
+  .proto-app.nav-open .nav-label, .proto-app.nav-open .brand-name { opacity: 0; }
+  .proto-app .page-head h1 { font-size: 21px; }
+}
+@media (max-width: 640px) {
+  .proto-app .head-actions { max-width: 100%; }
+  .proto-app .head-actions select { max-width: 100%; min-width: 0; }
+  .proto-app .artifact-row { flex-wrap: wrap; }
+  .proto-app .art-actions { justify-content: flex-start; }
+  .proto-app .field-row { grid-template-columns: 1fr; }
+}
