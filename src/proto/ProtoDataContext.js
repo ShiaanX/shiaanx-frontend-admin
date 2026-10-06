@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { ROWS, INITIAL_CUSTOMERS, INITIAL_ARTIFACT_STATE, PART_LIBRARY, MATERIAL_OPTIONS, FINISH_OPTIONS } from './fixtures';
-import { kvGet, kvSet, fileSave, fileOpen } from './db';
+import { kvGet, kvSet, fileSave, fileOpen, fileDownload } from './db';
 
 // Everything you add in the preview — new enquiries, customers, uploads, checklist state — is kept
 // here and mirrored into IndexedDB (see db.js), so it survives a reload in THIS browser only.
@@ -12,6 +12,7 @@ const K = {
   userRows: 'userRows', userCustomers: 'userCustomers', userPartLibrary: 'userPartLibrary',
   artifactState: 'artifactState', clientReleased: 'clientReleased', sampleDataOn: 'sampleDataOn',
   userMaterials: 'userMaterials', userFinishes: 'userFinishes', rowOverrides: 'rowOverrides',
+  partStatusOverrides: 'partStatusOverrides',
 };
 
 export function ProtoDataProvider({ children }) {
@@ -27,6 +28,10 @@ export function ProtoDataProvider({ children }) {
   // rows, so Convert to order / Edit quote / Produce without an order work the same on a sample row
   // (for trying the flow) as on one you created.
   const [rowOverrides, setRowOverrides] = useState({});
+  // Production Board drag-and-drop: {rowId: {partIndex: newJobStatus}}, layered onto the matching
+  // part the same way rowOverrides layers onto a row — so a dragged status shows up everywhere that
+  // part appears (the board, the order's Closed-loop card), not just on the board itself.
+  const [partStatusOverrides, setPartStatusOverrides] = useState({});
   const [loaded, setLoaded] = useState(false);
   const seq = useRef(0);
 
@@ -41,6 +46,7 @@ export function ProtoDataProvider({ children }) {
       setUserMaterials(await kvGet(K.userMaterials, []));
       setUserFinishes(await kvGet(K.userFinishes, []));
       setRowOverrides(await kvGet(K.rowOverrides, {}));
+      setPartStatusOverrides(await kvGet(K.partStatusOverrides, {}));
       setLoaded(true);
     })();
   }, []);
@@ -61,8 +67,12 @@ export function ProtoDataProvider({ children }) {
     const today = new Date().toISOString().slice(0, 10);
     const customer = form.customer || 'Unnamed customer';
 
-    let drawingFileKey = null;
-    if (form.drawingFile) { drawingFileKey = `${jobId}:drawing`; await fileSave(drawingFileKey, form.drawingFile); }
+    let drawingFileKey = null, drawingFileName = null;
+    if (form.drawingFile) {
+      drawingFileKey = `${jobId}:drawing`;
+      drawingFileName = form.drawingFile.name;
+      await fileSave(drawingFileKey, form.drawingFile);
+    }
 
     const parts = [];
     const libraryEntries = {};
@@ -79,11 +89,11 @@ export function ProtoDataProvider({ children }) {
       libraryEntries[tmpl] = {
         name, customer, rev: '1', programSource: 'Enquiry stage',
         setups: 'Not yet planned', operations: '—', stock: '—', planStatus: 'PENDING',
-        datums: null, dims: null, fixture: null, cadFileKey, drawingFileKey,
+        datums: null, dims: null, fixture: null, cadFileKey, drawingFileKey, drawingFileName,
       };
     }
 
-    const row = { id: jobId, customer, date: today, status: 'PENDING', isOrder: false, remarks: form.remarks || '', parts, drawingFileKey };
+    const row = { id: jobId, customer, date: today, status: 'PENDING', isOrder: false, remarks: form.remarks || '', parts, drawingFileKey, drawingFileName };
     setUserRows(prev => { const next = [...prev, row]; kvSet(K.userRows, next); return next; });
     setUserPartLibrary(prev => { const next = { ...prev, ...libraryEntries }; kvSet(K.userPartLibrary, next); return next; });
     return jobId;
@@ -117,6 +127,15 @@ export function ProtoDataProvider({ children }) {
 
   const updateQuote = useCallback((id, patch) => patchRow(id, patch), [patchRow]);
 
+  // Dragging a Production Board card to a new column.
+  const setPartStatus = useCallback((rowId, partIndex, status) => {
+    setPartStatusOverrides(prev => {
+      const next = { ...prev, [rowId]: { ...(prev[rowId] || {}), [partIndex]: status } };
+      kvSet(K.partStatusOverrides, next);
+      return next;
+    });
+  }, []);
+
   // src is 'human' (Upload) or 'ai'/'tech' (Generate). For a human artifact we store the real file
   // the user picked; for a generated one we write a small placeholder document so "View" opens
   // something real, stamped with when it was generated — nothing is computed from uploaded data yet.
@@ -140,6 +159,7 @@ export function ProtoDataProvider({ children }) {
 
   const openArtifactFile = useCallback((jobId, artifactId) => fileOpen(`${jobId}:${artifactId}`), []);
   const openFile = useCallback((fileKey) => fileOpen(fileKey), []);
+  const downloadFile = useCallback((fileKey) => fileDownload(fileKey), []);
 
   const toggleClientRelease = useCallback((jobId, artifactId) => {
     setClientReleased(prev => {
@@ -165,7 +185,12 @@ export function ProtoDataProvider({ children }) {
     setUserFinishes(prev => (prev.includes(name) ? prev : (() => { const next = [...prev, name]; kvSet(K.userFinishes, next); return next; })()));
   }, []);
 
-  const applyOverride = (r) => (rowOverrides[r.id] ? { ...r, ...rowOverrides[r.id] } : r);
+  const applyOverride = (r) => {
+    let out = rowOverrides[r.id] ? { ...r, ...rowOverrides[r.id] } : r;
+    const partPatch = partStatusOverrides[r.id];
+    if (partPatch) out = { ...out, parts: out.parts.map((p, i) => (partPatch[i] ? { ...p, jobStatus: partPatch[i] } : p)) };
+    return out;
+  };
   const rows = (sampleDataOn ? [...userRows, ...ROWS] : [...userRows]).map(applyOverride);
   const customers = sampleDataOn ? [...userCustomers, ...INITIAL_CUSTOMERS] : [...userCustomers];
   const partLibrary = { ...(sampleDataOn ? PART_LIBRARY : {}), ...userPartLibrary };
@@ -178,8 +203,8 @@ export function ProtoDataProvider({ children }) {
     materials, finishes, addMaterial, addFinish,
     findRow: (id) => rows.find(r => r.id === id),
     findOrder: (orderId) => rows.find(r => r.orderId === orderId),
-    addCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote,
-    artifactState, markArtifactDone, openArtifactFile, openFile,
+    addCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote, setPartStatus,
+    artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,
   };
 

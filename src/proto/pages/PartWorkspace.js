@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { VerdictBadge } from '../components/Badges';
 import DownloadLink from '../components/DownloadLink';
+import ProtoCadViewer from '../components/ProtoCadViewer';
 import { useProtoData } from '../ProtoDataContext';
 
 const TABS = [['overview', 'Overview'], ['datums', 'Datums'], ['dims', 'Dimensions'], ['fixture', 'Fixture']];
@@ -37,20 +38,24 @@ export default function PartWorkspace() {
       {d.note && <div className="stub-note"><Icon name="info" /><div>{d.note}</div></div>}
       <div className="grid2">
         <div>
-          <div className="viewer-shell">
-            <div className="viewer-chip">CAD//VIEW · placeholder</div>
-            <svg className="part3d" viewBox="0 0 200 160" fill="none" stroke="#9db8d6" strokeWidth="2">
-              <path d="M40 20 L160 30 L150 140 L30 130 Z" fill="#1c2636" />
-              <path d="M55 30 L55 125 M70 31 L70 126 M85 32 L85 127 M100 33 L100 128 M115 34 L115 129 M130 35 L130 130" stroke="#2a3850" />
-              <circle cx="45" cy="35" r="7" stroke="#cfe0ef" /><circle cx="145" cy="45" r="7" stroke="#cfe0ef" />
-              <circle cx="40" cy="120" r="7" stroke="#cfe0ef" /><circle cx="140" cy="128" r="7" stroke="#cfe0ef" />
-            </svg>
-            <div className="viewer-tools"><button type="button">Shaded</button><button type="button">Wireframe</button><button type="button">Fit all</button></div>
-          </div>
+          {d.cadFileKey ? (
+            <ProtoCadViewer fileKey={d.cadFileKey} />
+          ) : (
+            <div className="viewer-shell">
+              <div className="viewer-chip">CAD//VIEW · placeholder</div>
+              <svg className="part3d" viewBox="0 0 200 160" fill="none" stroke="#9db8d6" strokeWidth="2">
+                <path d="M40 20 L160 30 L150 140 L30 130 Z" fill="#1c2636" />
+                <path d="M55 30 L55 125 M70 31 L70 126 M85 32 L85 127 M100 33 L100 128 M115 34 L115 129 M130 35 L130 130" stroke="#2a3850" />
+                <circle cx="45" cy="35" r="7" stroke="#cfe0ef" /><circle cx="145" cy="45" r="7" stroke="#cfe0ef" />
+                <circle cx="40" cy="120" r="7" stroke="#cfe0ef" /><circle cx="140" cy="128" r="7" stroke="#cfe0ef" />
+              </svg>
+              <div className="viewer-tools"><button type="button">Shaded</button><button type="button">Wireframe</button><button type="button">Fit all</button></div>
+            </div>
+          )}
           {d.cadFileKey && (
             <div className="cell-sub" style={{ marginTop: 8 }}>
-              Uploaded CAD: <DownloadLink file="View uploaded STEP file" fileKey={d.cadFileKey} />
-              {d.drawingFileKey && <> · <DownloadLink file="View drawing" fileKey={d.drawingFileKey} /></>}
+              <DownloadLink file="Download STEP file" fileKey={d.cadFileKey} />
+              {d.drawingFileKey && <> · <DownloadLink file={`Download ${d.drawingFileName || 'drawing'}`} fileKey={d.drawingFileKey} /></>}
             </div>
           )}
         </div>

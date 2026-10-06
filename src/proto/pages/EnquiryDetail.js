@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { StatusBadge } from '../components/Badges';
-import DownloadLink from '../components/DownloadLink';
 import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
 import EditQuoteModal from '../components/EditQuoteModal';
@@ -55,7 +54,7 @@ function TrialJobDetail({ r }) {
 export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { findRow, openFile, convertToOrder, markNoOrderJob } = useProtoData();
+  const { findRow, openFile, downloadFile, convertToOrder, markNoOrderJob } = useProtoData();
   const r = findRow(id);
   const [showEditQuote, setShowEditQuote] = useState(false);
 
@@ -68,7 +67,6 @@ export default function EnquiryDetail() {
   if (!r) return <div className="empty-hint">Enquiry not found.</div>;
   if (r.isOrder) return null;
   if (r.jobType === 'TRIAL') return <TrialJobDetail r={r} />;
-  const part = r.parts[0];
 
   const convert = () => navigate(`/proto/orders/${convertToOrder(r.id)}`);
 
@@ -99,22 +97,45 @@ export default function EnquiryDetail() {
             <h2><Icon name="box" /> Parts</h2>
             {r.parts.map(p => (
               <div className="part-row" key={p.tmpl || p.name}>
-                <div className="part-row-head"><span className="name">{p.name}</span><button type="button" className="btn-text" onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D <Icon name="cad" size={14} /></button></div>
+                <div className="part-row-head"><span className="name">{p.name}</span><button type="button" className="btn-text" onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>Part workspace <Icon name="cad" size={14} /></button></div>
                 <div className="mini-grid">
                   <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
                   <div><span className="ml">Quantity</span><span className="mv">{p.qty}</span></div>
                   <div><span className="ml">Finish</span><span className="mv">{p.finish}</span></div>
-                  <div><span className="ml">CAD file</span><span className="mv"><DownloadLink file={p.file} fileKey={p.fileKey} /></span></div>
                 </div>
               </div>
             ))}
+            <div className="cell-sub" style={{ marginTop: 4 }}>CAD files and the drawing are in Documents received →</div>
           </div>
         </div>
         <div>
           <div className="card">
             <h2><Icon name="doc" /> Documents received</h2>
-            <div className="doc-row"><div className="doc-icon"><Icon name="cad" /></div><div><div className="doc-name">{part.fileKey ? part.file : 'STEP file'}</div><div className="doc-sub">{part.fileKey ? 'Uploaded by you' : '99.7 KB · uploaded by customer'}</div></div><div className="doc-actions"><button type="button" className="btn-text" disabled={!part.fileKey} onClick={() => openFile(part.fileKey)}>View</button></div></div>
-            <div className="doc-row"><div className="doc-icon"><Icon name="doc" /></div><div><div className="doc-name">{r.drawingFileKey ? 'Drawing.pdf' : 'Ballooned drawing.pdf'}</div><div className="doc-sub">{r.drawingFileKey ? 'Uploaded by you' : '1 page'}</div></div><div className="doc-actions"><button type="button" className="btn-text" disabled={!r.drawingFileKey} onClick={() => openFile(r.drawingFileKey)}>View</button></div></div>
+            {r.parts.map(p => (
+              <div className="doc-row" key={p.tmpl || p.name}>
+                <div className="doc-icon"><Icon name="cad" /></div>
+                <div>
+                  <div className="doc-name">{p.fileKey ? p.file : 'STEP file'}</div>
+                  <div className="doc-sub">{p.fileKey ? `3D model (CAD) · ${p.name}` : '99.7 KB · uploaded by customer'}</div>
+                </div>
+                <div className="doc-actions">
+                  <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D</button>
+                  <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => openFile(p.fileKey)}>View</button>
+                  <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => downloadFile(p.fileKey)}>Download</button>
+                </div>
+              </div>
+            ))}
+            <div className="doc-row">
+              <div className="doc-icon"><Icon name="doc" /></div>
+              <div>
+                <div className="doc-name">{r.drawingFileKey ? r.drawingFileName : 'Ballooned drawing.pdf'}</div>
+                <div className="doc-sub">{r.drawingFileKey ? '2D drawing (PDF)' : '1 page'}</div>
+              </div>
+              <div className="doc-actions">
+                <button type="button" className="btn-text" disabled={!r.drawingFileKey} onClick={() => openFile(r.drawingFileKey)}>View</button>
+                <button type="button" className="btn-text" disabled={!r.drawingFileKey} onClick={() => downloadFile(r.drawingFileKey)}>Download</button>
+              </div>
+            </div>
           </div>
           <div className="card">
             <h2>Status history</h2>

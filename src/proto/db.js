@@ -66,3 +66,18 @@ export async function fileOpen(key) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
   return true;
 }
+
+// Saves the file to disk under its original name, instead of opening it in a tab.
+export async function fileDownload(key) {
+  const entry = await fileGet(key);
+  if (!entry) return false;
+  const url = URL.createObjectURL(entry.blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = entry.name || 'download';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return true;
+}

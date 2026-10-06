@@ -183,12 +183,15 @@
 .proto-app .dim-main b { font-size: 12.5px; } .proto-app .dim-main span { display: block; color: var(--muted); font-size: 11px; }
 
 .proto-app .board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; }
-.proto-app .board-col { background: var(--card-bg); border: 1px solid var(--border); border-radius: 13px; min-width: 220px; }
+.proto-app .board-col { background: var(--card-bg); border: 1px solid var(--border); border-radius: 13px; min-width: 220px; transition: border-color .12s, background .12s; }
+.proto-app .board-col.drag-over { border-color: var(--primary); background: var(--primary-light); }
 .proto-app .board-col-head { padding: 13px 15px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 12.5px; display: flex; justify-content: space-between; align-items: center; }
 .proto-app .board-col-head .count { background: var(--shell-bg); color: var(--muted); border-radius: 20px; padding: 1px 9px; font-size: 11px; font-weight: 700; }
 .proto-app .board-col-body { padding: 10px; display: flex; flex-direction: column; gap: 9px; min-height: 60px; }
 .proto-app .job-card { background: var(--shell-bg); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; cursor: pointer; }
 .proto-app .job-card:hover { border-color: var(--primary); }
+.proto-app .job-card.draggable { cursor: grab; }
+.proto-app .job-card.dragging { opacity: .4; }
 .proto-app .job-card .jn { font-weight: 700; font-size: 12.5px; }
 .proto-app .job-card .jm { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .proto-app .job-card .jt { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
@@ -201,7 +204,7 @@
 
 .proto-app .viewer-shell { background: #11161f; border-radius: 13px; aspect-ratio: 16/10; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .proto-app .viewer-shell svg.part3d { width: 46%; opacity: .92; }
-.proto-app .viewer-chip { position: absolute; top: 12px; left: 12px; background: rgba(255,255,255,.08); color: #cfe0ef; font-size: 11px; padding: 5px 11px; border-radius: 7px; font-family: ui-monospace,monospace; }
+.proto-app .viewer-chip { position: absolute; top: 12px; left: 12px; z-index: 2; background: rgba(15,21,34,.55); color: #cfe0ef; font-size: 11px; padding: 5px 11px; border-radius: 7px; font-family: ui-monospace,monospace; pointer-events: none; }
 .proto-app .viewer-tools { position: absolute; bottom: 12px; left: 12px; right: 12px; display: flex; gap: 8px; }
 .proto-app .viewer-tools button { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: #cfe0ef; padding: 7px 12px; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; }
 
