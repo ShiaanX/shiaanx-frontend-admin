@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { JobStatusBadge } from './Badges';
+import DownloadLink from './DownloadLink';
 
 // Shared by order detail and a no-order (trial/internal) job — the production record looks
 // identical either way. Ported from the mockup's partsClosedLoopCard().
@@ -22,7 +23,7 @@ export default function ClosedLoopCard({ parts }) {
             <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
             <div><span className="ml">Quantity</span><span className="mv">{p.qty}</span></div>
             <div><span className="ml">Finish</span><span className="mv">{p.finish}</span></div>
-            <div><span className="ml">CAD file</span><span className="mv"><a href="#!" className="dl-link" onClick={(e) => e.preventDefault()}>{p.file} <Icon name="download" size={13} /></a></span></div>
+            <div><span className="ml">CAD file</span><span className="mv"><DownloadLink file={p.file} fileKey={p.fileKey} /></span></div>
           </div>
           {p.inspection ? (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>

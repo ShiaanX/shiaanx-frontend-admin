@@ -64,6 +64,8 @@
 .proto-app .crumb b { color: var(--ink); font-weight: 600; }
 .proto-app .topbar-spacer { flex: 1; }
 .proto-app .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+.proto-app .sample-toggle { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 6px; }
+.proto-app .sample-toggle:hover { color: var(--ink); }
 .proto-app .preview-flag { font: 700 10px/1 'Inter', sans-serif; letter-spacing: .04em; text-transform: uppercase; background: var(--warn-bg); color: var(--warn-ink); padding: 4px 9px; border-radius: 20px; }
 
 .proto-app main { flex: 1; min-width: 0; padding: 26px 28px 60px; max-width: 1280px; width: 100%; margin: 0 auto; }
@@ -224,6 +226,19 @@
 .proto-app .field textarea { resize: vertical; min-height: 64px; }
 .proto-app .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .proto-app .modal-foot { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+.proto-app .phone-field { display: flex; align-items: center; gap: 6px; }
+.proto-app .phone-cc { width: 58px; flex-shrink: 0; text-align: center; }
+.proto-app .phone-dash { color: var(--muted); font-weight: 700; }
+.proto-app .phone-num { flex: 1; }
+
+.proto-app .dropzone { border: 1.5px dashed var(--border); border-radius: 10px; padding: 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; background: var(--shell-bg); transition: border-color .12s, background .12s; }
+.proto-app .dropzone:hover, .proto-app .dropzone.over { border-color: var(--primary); background: var(--primary-light); }
+.proto-app .dropzone.has-file { cursor: default; align-items: flex-start; }
+.proto-app .dropzone svg.icon { color: var(--primary); flex-shrink: 0; margin-top: 1px; }
+.proto-app .dropzone .dz-sub { font-size: 12px; color: var(--muted); }
+.proto-app .dropzone .dz-file { flex: 1; min-width: 0; }
+.proto-app .dropzone .dz-name { font-weight: 600; font-size: 13px; word-break: break-all; }
+
 .proto-app .inline-add { border: 1px dashed var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 
 .proto-app .dl-link { display: inline-flex; align-items: center; gap: 5px; color: var(--primary); font-weight: 600; cursor: pointer; text-decoration: none; background: none; border: 0; padding: 0; font-size: inherit; }
@@ -259,4 +274,7 @@
   .proto-app .artifact-row { flex-wrap: wrap; }
   .proto-app .art-actions { justify-content: flex-start; }
   .proto-app .field-row { grid-template-columns: 1fr; }
+  .proto-app .crumb { display: none; }
+  .proto-app .sample-toggle-label { display: none; }
+  .proto-app .preview-flag { display: none; }
 }

@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import Icon from '../icons';
+import { useProtoData } from '../ProtoDataContext';
 
-// Mimics the mockup's brief "Downloading…" feedback. No real file sits behind this yet.
-export default function DownloadLink({ file }) {
+// With a fileKey (a real upload stored in this browser's IndexedDB), opens that exact file.
+// Without one (sample-data rows have no real file behind them), mimics the mockup's brief
+// "Downloading…" feedback — there is nothing real to open.
+export default function DownloadLink({ file, fileKey }) {
+  const { openFile } = useProtoData();
   const [busy, setBusy] = useState(false);
-  const click = (e) => {
+  const click = async (e) => {
     e.preventDefault();
+    if (fileKey) { openFile(fileKey); return; }
     setBusy(true);
     setTimeout(() => setBusy(false), 700);
   };

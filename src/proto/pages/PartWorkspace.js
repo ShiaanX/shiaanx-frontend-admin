@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { VerdictBadge } from '../components/Badges';
-import { PART_LIBRARY } from '../fixtures';
+import DownloadLink from '../components/DownloadLink';
+import { useProtoData } from '../ProtoDataContext';
 
 const TABS = [['overview', 'Overview'], ['datums', 'Datums'], ['dims', 'Dimensions'], ['fixture', 'Fixture']];
 const PLAN_CLS = { APPROVED: 'b-done', DRAFT: 'b-quoted', PENDING: 'b-neutral' };
@@ -16,9 +17,10 @@ function Empty({ children }) {
 export default function PartWorkspace() {
   const params = useParams();
   const navigate = useNavigate();
+  const { partLibrary } = useProtoData();
   const [tab, setTab] = useState('overview');
-  const tmplId = PART_LIBRARY[params.tmplId] ? params.tmplId : 'TMPL-BASEPLATE';
-  const d = PART_LIBRARY[tmplId];
+  const tmplId = partLibrary[params.tmplId] ? params.tmplId : 'TMPL-BASEPLATE';
+  const d = partLibrary[tmplId];
 
   return (
     <div>
@@ -26,7 +28,7 @@ export default function PartWorkspace() {
         <div><h1>{d.name}</h1><div className="page-sub">{tmplId} · rev {d.rev} · {d.customer}</div></div>
         <div className="head-actions">
           <select aria-label="Part" value={tmplId} onChange={e => { setTab('overview'); navigate(`/proto/parts/${e.target.value}`); }}>
-            {Object.entries(PART_LIBRARY).map(([id, p]) => <option key={id} value={id}>{p.name} — {p.customer}</option>)}
+            {Object.entries(partLibrary).map(([id, p]) => <option key={id} value={id}>{p.name} — {p.customer}</option>)}
           </select>
           <button type="button" className="btn btn-ghost">Request changes</button>
           <button type="button" className="btn px-btn-primary">Approve plan</button>
@@ -45,6 +47,12 @@ export default function PartWorkspace() {
             </svg>
             <div className="viewer-tools"><button type="button">Shaded</button><button type="button">Wireframe</button><button type="button">Fit all</button></div>
           </div>
+          {d.cadFileKey && (
+            <div className="cell-sub" style={{ marginTop: 8 }}>
+              Uploaded CAD: <DownloadLink file="View uploaded STEP file" fileKey={d.cadFileKey} />
+              {d.drawingFileKey && <> · <DownloadLink file="View drawing" fileKey={d.drawingFileKey} /></>}
+            </div>
+          )}
         </div>
         <div>
           <div className="tabs">

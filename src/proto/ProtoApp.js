@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import './proto.css';
 import Icon from './icons';
-import { ProtoDataProvider } from './ProtoDataContext';
+import { ProtoDataProvider, useProtoData } from './ProtoDataContext';
 
 import EnquiriesOrders from './pages/EnquiriesOrders';
 import EnquiryDetail from './pages/EnquiryDetail';
@@ -36,6 +36,7 @@ function crumbFor(pathname) {
 
 function Shell({ children }) {
   const [navOpen, setNavOpen] = useState(true);
+  const { sampleDataOn, toggleSampleData } = useProtoData();
   const location = useLocation();
   const crumb = crumbFor(location.pathname);
   const [section, title] = crumb.split(' / ');
@@ -64,7 +65,15 @@ function Shell({ children }) {
           <button type="button" className="px-icon-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle menu"><Icon name="base" /></button>
           <div className="crumb">{section} / <b>{title}</b></div>
           <div className="topbar-spacer" />
-          <span className="preview-flag">Preview — mock data</span>
+          <button
+            type="button"
+            className="sample-toggle"
+            onClick={toggleSampleData}
+            title={sampleDataOn ? 'Hide the sample enquiries and customers, keeping anything you added' : 'Show the sample enquiries and customers again'}
+          >
+            <span className={`toggle ${sampleDataOn ? 'on' : ''}`} /> <span className="sample-toggle-label">Sample data</span>
+          </button>
+          <span className="preview-flag">Preview — your uploads stay in this browser</span>
           <div className="avatar" style={{ marginLeft: 14 }}>AK</div>
         </header>
         <main>{children}</main>

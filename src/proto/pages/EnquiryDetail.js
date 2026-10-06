@@ -52,10 +52,11 @@ function TrialJobDetail({ r }) {
 export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { findRow } = useProtoData();
+  const { findRow, openFile } = useProtoData();
   const r = findRow(id);
   if (!r) return <div className="empty-hint">Enquiry not found.</div>;
   if (r.jobType === 'TRIAL') return <TrialJobDetail r={r} />;
+  const part = r.parts[0];
 
   return (
     <div>
@@ -82,12 +83,12 @@ export default function EnquiryDetail() {
             <h2><Icon name="box" /> Parts</h2>
             {r.parts.map(p => (
               <div className="part-row" key={p.name}>
-                <div className="part-row-head"><span className="name">{p.name}</span><button type="button" className="btn-text">View 3D <Icon name="cad" size={14} /></button></div>
+                <div className="part-row-head"><span className="name">{p.name}</span><button type="button" className="btn-text" onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D <Icon name="cad" size={14} /></button></div>
                 <div className="mini-grid">
                   <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
                   <div><span className="ml">Quantity</span><span className="mv">{p.qty}</span></div>
                   <div><span className="ml">Finish</span><span className="mv">{p.finish}</span></div>
-                  <div><span className="ml">CAD file</span><span className="mv"><DownloadLink file={p.file} /></span></div>
+                  <div><span className="ml">CAD file</span><span className="mv"><DownloadLink file={p.file} fileKey={p.fileKey} /></span></div>
                 </div>
               </div>
             ))}
@@ -96,8 +97,8 @@ export default function EnquiryDetail() {
         <div>
           <div className="card">
             <h2><Icon name="doc" /> Documents received</h2>
-            <div className="doc-row"><div className="doc-icon"><Icon name="cad" /></div><div><div className="doc-name">STEP file</div><div className="doc-sub">99.7 KB · uploaded by customer</div></div><div className="doc-actions"><button type="button" className="btn-text">View</button></div></div>
-            <div className="doc-row"><div className="doc-icon"><Icon name="doc" /></div><div><div className="doc-name">Ballooned drawing.pdf</div><div className="doc-sub">1 page</div></div><div className="doc-actions"><button type="button" className="btn-text">View</button></div></div>
+            <div className="doc-row"><div className="doc-icon"><Icon name="cad" /></div><div><div className="doc-name">{part.fileKey ? part.file : 'STEP file'}</div><div className="doc-sub">{part.fileKey ? 'Uploaded by you' : '99.7 KB · uploaded by customer'}</div></div><div className="doc-actions"><button type="button" className="btn-text" disabled={!part.fileKey} onClick={() => openFile(part.fileKey)}>View</button></div></div>
+            <div className="doc-row"><div className="doc-icon"><Icon name="doc" /></div><div><div className="doc-name">{r.drawingFileKey ? 'Drawing.pdf' : 'Ballooned drawing.pdf'}</div><div className="doc-sub">{r.drawingFileKey ? 'Uploaded by you' : '1 page'}</div></div><div className="doc-actions"><button type="button" className="btn-text" disabled={!r.drawingFileKey} onClick={() => openFile(r.drawingFileKey)}>View</button></div></div>
           </div>
           <div className="card">
             <h2>Status history</h2>

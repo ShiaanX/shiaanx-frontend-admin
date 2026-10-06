@@ -1,16 +1,31 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import Modal from './Modal';
+import Dropzone from './Dropzone';
+import EditableSelect from './EditableSelect';
 import { useProtoData } from '../ProtoDataContext';
 
 // Ported from the mockup's New Enquiry modal, including the quick-add customer flow and the
 // "no customer order" checkbox (trial/internal build) that changes what the job gets created as.
+// Unlike the mockup, Create actually adds a row (via ProtoDataContext.createEnquiry): uploaded
+// files are saved to this browser's storage and nothing else is generated — the new row lands with
+// its artifact checklist empty, same as any other enquiry would start out.
 export default function NewEnquiryModal({ onClose }) {
-  const { customers, addCustomer } = useProtoData();
+  const { customers, addCustomer, createEnquiry, materials, finishes, addMaterial, addFinish } = useProtoData();
+  const navigate = useNavigate();
   const [noOrderMode, setNoOrderMode] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [qa, setQa] = useState({ name: '', company: '', email: '', phone: '' });
+  const [partName, setPartName] = useState('');
+  const [qty, setQty] = useState(1);
+  const [material, setMaterial] = useState('Aluminium 6061');
+  const [finish, setFinish] = useState('As machined');
+  const [cadFile, setCadFile] = useState(null);
+  const [drawingFile, setDrawingFile] = useState(null);
+  const [remarks, setRemarks] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const saveQuickAdd = () => {
     const name = qa.name.trim() || 'New customer';
@@ -19,13 +34,22 @@ export default function NewEnquiryModal({ onClose }) {
     setShowQuickAdd(false);
   };
 
+  const create = async () => {
+    setSaving(true);
+    const jobId = await createEnquiry({ noOrderMode, customer: customerName, partName, qty, material, finish, cadFile, drawingFile, remarks });
+    onClose();
+    navigate(`/proto/enquiries/${jobId}`);
+  };
+
   return (
     <Modal
       title={noOrderMode ? 'New job — no customer order' : 'New enquiry'}
       onClose={onClose}
       footer={<>
         <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn px-btn-primary" onClick={onClose}>{noOrderMode ? 'Create job' : 'Create enquiry'}</button>
+        <button type="button" className="btn px-btn-primary" disabled={saving || !partName} onClick={create}>
+          {saving ? 'Creating…' : (noOrderMode ? 'Create job' : 'Create enquiry')}
+        </button>
       </>}
     >
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12.5 }}>
@@ -70,20 +94,17 @@ export default function NewEnquiryModal({ onClose }) {
       )}
 
       <div className="field-row">
-        <div className="field"><label>Part name</label><input placeholder="e.g. Bracket, Base Plate" /></div>
-        <div className="field"><label>Quantity</label><input type="number" defaultValue={1} min={1} /></div>
+        <div className="field"><label>Part name</label><input value={partName} onChange={e => setPartName(e.target.value)} placeholder="e.g. Bracket, Base Plate" /></div>
+        <div className="field"><label>Quantity</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} min={1} /></div>
       </div>
       <div className="field-row">
-        <div className="field"><label>Material</label>
-          <select><option>Aluminium 6061</option><option>Aluminium 7075</option><option>Copper</option><option>Mild Steel</option></select>
-        </div>
-        <div className="field"><label>Finish</label>
-          <select><option>As machined</option><option>Anodised</option><option>Bead blast</option><option>Ni plate</option></select>
-        </div>
+        <EditableSelect label="Material" options={materials} value={material} onChange={setMaterial} onAdd={addMaterial} placeholder="e.g. Titanium Grade 5" />
+        <EditableSelect label="Finish" options={finishes} value={finish} onChange={setFinish} onAdd={addFinish} placeholder="e.g. Chromate conversion" />
       </div>
-      <div className="field"><label>CAD file (.step/.stp)</label><input type="file" /></div>
-      <div className="field"><label>Drawing (.pdf)</label><input type="file" /></div>
-      <div className="field"><label>Remarks (optional)</label><textarea placeholder="Anything the team should know about this enquiry…" /></div>
+      <Dropzone label="CAD file (.step/.stp)" accept=".step,.stp" file={cadFile} onChange={setCadFile} />
+      <Dropzone label="Drawing (.pdf)" accept=".pdf" file={drawingFile} onChange={setDrawingFile} />
+      <div className="field"><label>Remarks (optional)</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Anything the team should know about this enquiry…" /></div>
+      {!partName && <p className="page-sub" style={{ margin: 0 }}>Part name is required to create the enquiry.</p>}
     </Modal>
   );
 }

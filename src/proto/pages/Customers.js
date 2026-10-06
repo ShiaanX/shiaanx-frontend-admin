@@ -18,7 +18,7 @@ export default function Customers() {
       </div>
       <div className="tablecard overflow-x">
         <table className="data">
-          <thead><tr><th>Customer</th><th>Company</th><th>Contact</th><th>Enquiries</th><th>Orders</th></tr></thead>
+          <thead><tr><th>Customer</th><th>Company</th><th>Contact</th><th>Website</th><th>Enquiries</th><th>Orders</th></tr></thead>
           <tbody>
             {customers.map(c => {
               const enq = rows.filter(r => r.customer === c.name);
@@ -27,6 +27,7 @@ export default function Customers() {
                   <td className="cell-primary">{c.name}</td>
                   <td>{c.company || '—'}</td>
                   <td><div>{c.email || '—'}</div><div className="cell-sub">{c.phone || ''}</div></td>
+                  <td>{c.website ? <a href={c.website} target="_blank" rel="noreferrer" className="dl-link">{c.website}</a> : '—'}</td>
                   <td>{enq.length}</td>
                   <td>{enq.filter(r => r.isOrder).length}</td>
                 </tr>

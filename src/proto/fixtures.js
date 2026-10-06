@@ -229,6 +229,11 @@ export const CL_PARTS = {
     ] },
 };
 
+// Base options for the New Enquiry form. Anything typed into "+ Add new…" there is appended to
+// these (persisted in this browser) so it shows up as a normal option next time.
+export const MATERIAL_OPTIONS = ['Aluminium 6061', 'Aluminium 7075', 'Copper', 'Mild Steel'];
+export const FINISH_OPTIONS = ['As machined', 'Anodised', 'Bead blast', 'Ni plate'];
+
 export const SETTINGS = {
   users: [['Anita Kumar', 'Admin', 'Active'], ['Ravi Shah', 'Process engineer', 'Active'], ['Meera Joshi', 'QC lead', 'Active'], ['Sanjay Rao', 'Production planner', 'Invited']],
   materials: [['Aluminium 6061', '₹ 420/kg', 'As machined, Anodised, Bead blast'], ['Aluminium 7075', '₹ 610/kg', 'As machined, Anodised'], ['Copper', '₹ 980/kg', 'As machined, Ni plate']],
