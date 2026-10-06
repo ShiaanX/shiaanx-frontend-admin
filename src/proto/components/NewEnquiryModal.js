@@ -6,23 +6,27 @@ import Dropzone from './Dropzone';
 import EditableSelect from './EditableSelect';
 import { useProtoData } from '../ProtoDataContext';
 
-// Ported from the mockup's New Enquiry modal, including the quick-add customer flow and the
-// "no customer order" checkbox (trial/internal build) that changes what the job gets created as.
-// Unlike the mockup, Create actually adds a row (via ProtoDataContext.createEnquiry): uploaded
-// files are saved to this browser's storage and nothing else is generated — the new row lands with
-// its artifact checklist empty, same as any other enquiry would start out.
+const emptyPart = () => ({ key: Math.random().toString(36).slice(2), partName: '', qty: 1, material: 'Aluminium 6061', finish: 'As machined', cadFile: null });
+
+function customerLabel(c) {
+  return c.company && c.company !== c.name ? `${c.name} (${c.company})` : c.name;
+}
+
+// Ported from the mockup's New Enquiry modal, including the quick-add customer flow. Create
+// actually adds a row (via ProtoDataContext.createEnquiry): uploaded files are saved to this
+// browser's storage and nothing else is generated. An enquiry can carry several part types — each
+// gets its own name/qty/material/finish/CAD file; the drawing is shared across the enquiry.
+//
+// The "no confirmed order" choice is no longer made here — it's an action on the enquiry itself
+// once it exists (see EnquiryDetail's "Produce without a confirmed order" button), so it can be
+// decided later rather than guessed at intake.
 export default function NewEnquiryModal({ onClose }) {
   const { customers, addCustomer, createEnquiry, materials, finishes, addMaterial, addFinish } = useProtoData();
   const navigate = useNavigate();
-  const [noOrderMode, setNoOrderMode] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [qa, setQa] = useState({ name: '', company: '', email: '', phone: '' });
-  const [partName, setPartName] = useState('');
-  const [qty, setQty] = useState(1);
-  const [material, setMaterial] = useState('Aluminium 6061');
-  const [finish, setFinish] = useState('As machined');
-  const [cadFile, setCadFile] = useState(null);
+  const [parts, setParts] = useState([emptyPart()]);
   const [drawingFile, setDrawingFile] = useState(null);
   const [remarks, setRemarks] = useState('');
   const [saving, setSaving] = useState(false);
@@ -34,77 +38,83 @@ export default function NewEnquiryModal({ onClose }) {
     setShowQuickAdd(false);
   };
 
+  const updatePart = (key, patch) => setParts(prev => prev.map(p => (p.key === key ? { ...p, ...patch } : p)));
+  const addPart = () => setParts(prev => [...prev, emptyPart()]);
+  const removePart = (key) => setParts(prev => (prev.length > 1 ? prev.filter(p => p.key !== key) : prev));
+
+  const hasAPartName = parts.some(p => p.partName.trim());
   const create = async () => {
     setSaving(true);
-    const jobId = await createEnquiry({ noOrderMode, customer: customerName, partName, qty, material, finish, cadFile, drawingFile, remarks });
+    const jobId = await createEnquiry({ customer: customerName, parts, drawingFile, remarks });
     onClose();
     navigate(`/proto/enquiries/${jobId}`);
   };
 
   return (
     <Modal
-      title={noOrderMode ? 'New job — no customer order' : 'New enquiry'}
+      title="New enquiry"
+      maxWidth={640}
       onClose={onClose}
       footer={<>
         <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn px-btn-primary" disabled={saving || !partName} onClick={create}>
-          {saving ? 'Creating…' : (noOrderMode ? 'Create job' : 'Create enquiry')}
+        <button type="button" className="btn px-btn-primary" disabled={saving || !hasAPartName} onClick={create}>
+          {saving ? 'Creating…' : 'Create enquiry'}
         </button>
       </>}
     >
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12.5 }}>
-        <input type="checkbox" checked={noOrderMode} onChange={(e) => setNoOrderMode(e.target.checked)} style={{ marginTop: 2 }} />
-        <span>
-          We're manufacturing this without a customer order behind it (trial / internal build).{' '}
-          <span style={{ color: 'var(--muted)' }}>Order? stays No in the list, but the full production record — plan, CAM, machine, inspection — is still tracked.</span>
-        </span>
-      </label>
-
-      {!noOrderMode && (
-        <>
-          <div className="field">
-            <label>Customer</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <select style={{ flex: 1 }} value={customerName} onChange={(e) => setCustomerName(e.target.value)}>
-                <option value="">Select a customer…</option>
-                {customers.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select>
-              <button type="button" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setShowQuickAdd(s => !s)}>
-                <Icon name="plus" /> New
-              </button>
-            </div>
+      <div className="field">
+        <label>Customer</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select style={{ flex: 1 }} value={customerName} onChange={(e) => setCustomerName(e.target.value)}>
+            <option value="">Select a customer…</option>
+            {customers.map(c => <option key={c.name} value={c.name}>{customerLabel(c)}</option>)}
+          </select>
+          <button type="button" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setShowQuickAdd(s => !s)}>
+            <Icon name="plus" /> New
+          </button>
+        </div>
+      </div>
+      {showQuickAdd && (
+        <div className="inline-add">
+          <div className="field-row">
+            <div className="field"><label>Customer / contact name</label><input value={qa.name} onChange={e => setQa(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Priya Sharma" /></div>
+            <div className="field"><label>Company</label><input value={qa.company} onChange={e => setQa(f => ({ ...f, company: e.target.value }))} placeholder="e.g. Client A Defence Systems" /></div>
           </div>
-          {showQuickAdd && (
-            <div className="inline-add">
-              <div className="field-row">
-                <div className="field"><label>Customer / contact name</label><input value={qa.name} onChange={e => setQa(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Priya Sharma" /></div>
-                <div className="field"><label>Company</label><input value={qa.company} onChange={e => setQa(f => ({ ...f, company: e.target.value }))} placeholder="e.g. Client A Defence Systems" /></div>
-              </div>
-              <div className="field-row">
-                <div className="field"><label>Email</label><input type="email" value={qa.email} onChange={e => setQa(f => ({ ...f, email: e.target.value }))} placeholder="name@company.com" /></div>
-                <div className="field"><label>Phone</label><input value={qa.phone} onChange={e => setQa(f => ({ ...f, phone: e.target.value }))} placeholder="+91…" /></div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" className="btn-sm text" onClick={() => setShowQuickAdd(false)}>Cancel</button>
-                <button type="button" className="btn-sm primary" onClick={saveQuickAdd}>Save customer</button>
-              </div>
-            </div>
-          )}
-        </>
+          <div className="field-row">
+            <div className="field"><label>Email</label><input type="email" value={qa.email} onChange={e => setQa(f => ({ ...f, email: e.target.value }))} placeholder="name@company.com" /></div>
+            <div className="field"><label>Phone</label><input value={qa.phone} onChange={e => setQa(f => ({ ...f, phone: e.target.value }))} placeholder="+91-9876543210" /></div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="btn-sm text" onClick={() => setShowQuickAdd(false)}>Cancel</button>
+            <button type="button" className="btn-sm primary" onClick={saveQuickAdd}>Save customer</button>
+          </div>
+        </div>
       )}
 
-      <div className="field-row">
-        <div className="field"><label>Part name</label><input value={partName} onChange={e => setPartName(e.target.value)} placeholder="e.g. Bracket, Base Plate" /></div>
-        <div className="field"><label>Quantity</label><input type="number" value={qty} onChange={e => setQty(e.target.value)} min={1} /></div>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {parts.map((p, i) => (
+          <div className="inline-add" key={p.key}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <b style={{ fontSize: 12.5 }}>Part {i + 1}</b>
+              {parts.length > 1 && <button type="button" className="btn-sm text" onClick={() => removePart(p.key)}>Remove</button>}
+            </div>
+            <div className="field-row">
+              <div className="field"><label>Part name</label><input value={p.partName} onChange={e => updatePart(p.key, { partName: e.target.value })} placeholder="e.g. Bracket, Base Plate" /></div>
+              <div className="field"><label>Quantity</label><input type="number" value={p.qty} onChange={e => updatePart(p.key, { qty: e.target.value })} min={1} /></div>
+            </div>
+            <div className="field-row">
+              <EditableSelect label="Material" options={materials} value={p.material} onChange={(v) => updatePart(p.key, { material: v })} onAdd={addMaterial} placeholder="e.g. Titanium Grade 5" />
+              <EditableSelect label="Finish" options={finishes} value={p.finish} onChange={(v) => updatePart(p.key, { finish: v })} onAdd={addFinish} placeholder="e.g. Chromate conversion" />
+            </div>
+            <Dropzone label="CAD file (.step/.stp)" accept=".step,.stp" file={p.cadFile} onChange={(f) => updatePart(p.key, { cadFile: f })} />
+          </div>
+        ))}
+        <button type="button" className="btn btn-ghost" onClick={addPart}><Icon name="plus" /> Add another part type</button>
       </div>
-      <div className="field-row">
-        <EditableSelect label="Material" options={materials} value={material} onChange={setMaterial} onAdd={addMaterial} placeholder="e.g. Titanium Grade 5" />
-        <EditableSelect label="Finish" options={finishes} value={finish} onChange={setFinish} onAdd={addFinish} placeholder="e.g. Chromate conversion" />
-      </div>
-      <Dropzone label="CAD file (.step/.stp)" accept=".step,.stp" file={cadFile} onChange={setCadFile} />
-      <Dropzone label="Drawing (.pdf)" accept=".pdf" file={drawingFile} onChange={setDrawingFile} />
+
+      <Dropzone label="Drawing (.pdf, covers all parts above)" accept=".pdf" file={drawingFile} onChange={setDrawingFile} />
       <div className="field"><label>Remarks (optional)</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Anything the team should know about this enquiry…" /></div>
-      {!partName && <p className="page-sub" style={{ margin: 0 }}>Part name is required to create the enquiry.</p>}
+      {!hasAPartName && <p className="page-sub" style={{ margin: 0 }}>At least one part needs a name to create the enquiry.</p>}
     </Modal>
   );
 }

@@ -11,7 +11,7 @@ const ProtoDataContext = createContext(null);
 const K = {
   userRows: 'userRows', userCustomers: 'userCustomers', userPartLibrary: 'userPartLibrary',
   artifactState: 'artifactState', clientReleased: 'clientReleased', sampleDataOn: 'sampleDataOn',
-  userMaterials: 'userMaterials', userFinishes: 'userFinishes',
+  userMaterials: 'userMaterials', userFinishes: 'userFinishes', rowOverrides: 'rowOverrides',
 };
 
 export function ProtoDataProvider({ children }) {
@@ -23,6 +23,10 @@ export function ProtoDataProvider({ children }) {
   const [sampleDataOn, setSampleDataOn] = useState(true);
   const [userMaterials, setUserMaterials] = useState([]);
   const [userFinishes, setUserFinishes] = useState([]);
+  // Patches applied on top of a row by id — covers both user-created rows and the sample fixture
+  // rows, so Convert to order / Edit quote / Produce without an order work the same on a sample row
+  // (for trying the flow) as on one you created.
+  const [rowOverrides, setRowOverrides] = useState({});
   const [loaded, setLoaded] = useState(false);
   const seq = useRef(0);
 
@@ -36,6 +40,7 @@ export function ProtoDataProvider({ children }) {
       setSampleDataOn(await kvGet(K.sampleDataOn, true));
       setUserMaterials(await kvGet(K.userMaterials, []));
       setUserFinishes(await kvGet(K.userFinishes, []));
+      setRowOverrides(await kvGet(K.rowOverrides, {}));
       setLoaded(true);
     })();
   }, []);
@@ -49,43 +54,68 @@ export function ProtoDataProvider({ children }) {
     setUserCustomers(prev => { const next = [...prev, c]; kvSet(K.userCustomers, next); return next; });
   }, []);
 
-  // Builds the enquiry row + a matching Part Workspace entry from the New Enquiry form, saves any
-  // uploaded CAD file / drawing into the file store, and returns the new row's id.
+  // Builds the enquiry row — one or more parts — plus a matching Part Workspace entry for each
+  // part, saves any uploaded CAD files / drawing into the file store, and returns the new row's id.
   const createEnquiry = useCallback(async (form) => {
     const jobId = nextId('ENQ-USER');
-    const tmpl = nextId('TMPL-USER');
     const today = new Date().toISOString().slice(0, 10);
+    const customer = form.customer || 'Unnamed customer';
 
-    let cadFileKey = null, drawingFileKey = null;
-    if (form.cadFile) { cadFileKey = `${jobId}:cad`; await fileSave(cadFileKey, form.cadFile); }
+    let drawingFileKey = null;
     if (form.drawingFile) { drawingFileKey = `${jobId}:drawing`; await fileSave(drawingFileKey, form.drawingFile); }
 
-    const row = {
-      id: jobId, customer: form.noOrderMode ? '— Internal / R&D —' : (form.customer || 'Unnamed customer'),
-      date: today, status: 'PENDING', isOrder: false,
-      jobType: form.noOrderMode ? 'TRIAL' : undefined,
-      remarks: form.remarks || '',
-      parts: [{
-        tmpl, name: form.partName || 'Untitled part', material: form.material, qty: Number(form.qty) || 1,
-        finish: form.finish, file: form.cadFile ? form.cadFile.name : 'Not uploaded', fileKey: cadFileKey,
-      }],
-      drawingFileKey,
-    };
-    setUserRows(prev => { const next = [...prev, row]; kvSet(K.userRows, next); return next; });
-    setUserPartLibrary(prev => {
-      const next = {
-        ...prev,
-        [tmpl]: {
-          name: row.parts[0].name, customer: row.customer, rev: '1', programSource: 'Enquiry stage',
-          setups: 'Not yet planned', operations: '—', stock: '—', planStatus: 'PENDING',
-          datums: null, dims: null, fixture: null, cadFileKey, drawingFileKey,
-        },
+    const parts = [];
+    const libraryEntries = {};
+    for (let i = 0; i < form.parts.length; i++) {
+      const p = form.parts[i];
+      const tmpl = nextId('TMPL-USER');
+      let cadFileKey = null;
+      if (p.cadFile) { cadFileKey = `${jobId}:cad:${i}`; await fileSave(cadFileKey, p.cadFile); }
+      const name = p.partName || `Untitled part ${i + 1}`;
+      parts.push({
+        tmpl, name, material: p.material, qty: Number(p.qty) || 1,
+        finish: p.finish, file: p.cadFile ? p.cadFile.name : 'Not uploaded', fileKey: cadFileKey,
+      });
+      libraryEntries[tmpl] = {
+        name, customer, rev: '1', programSource: 'Enquiry stage',
+        setups: 'Not yet planned', operations: '—', stock: '—', planStatus: 'PENDING',
+        datums: null, dims: null, fixture: null, cadFileKey, drawingFileKey,
       };
-      kvSet(K.userPartLibrary, next);
-      return next;
-    });
+    }
+
+    const row = { id: jobId, customer, date: today, status: 'PENDING', isOrder: false, remarks: form.remarks || '', parts, drawingFileKey };
+    setUserRows(prev => { const next = [...prev, row]; kvSet(K.userRows, next); return next; });
+    setUserPartLibrary(prev => { const next = { ...prev, ...libraryEntries }; kvSet(K.userPartLibrary, next); return next; });
     return jobId;
   }, [nextId]);
+
+  const patchRow = useCallback((id, patch) => {
+    setRowOverrides(prev => {
+      const next = { ...prev, [id]: { ...(prev[id] || {}), ...patch } };
+      kvSet(K.rowOverrides, next);
+      return next;
+    });
+  }, []);
+
+  // Turns any enquiry row into an order — generates an order id and switches it over, same as a
+  // real "Convert to order" would. Works on a sample row too, so the flow can be tried end to end.
+  const convertToOrder = useCallback((id) => {
+    const orderId = nextId('ORD-USER');
+    const today = new Date().toISOString().slice(0, 10);
+    const deadline = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    patchRow(id, { isOrder: true, orderId, orderDate: today, deadline, status: 'IN_PRODUCTION', jobType: undefined });
+    return orderId;
+  }, [nextId, patchRow]);
+
+  // "We're manufacturing this without a confirmed order" — moved here from enquiry creation, so it
+  // is a decision you make about an enquiry that already exists, not a checkbox up front. Order?
+  // stays No, but it unlocks the full artifact checklist (CAM program, inspection, etc.) the same
+  // way converting to an order would.
+  const markNoOrderJob = useCallback((id) => {
+    patchRow(id, { jobType: 'TRIAL', status: 'IN_PRODUCTION' });
+  }, [patchRow]);
+
+  const updateQuote = useCallback((id, patch) => patchRow(id, patch), [patchRow]);
 
   // src is 'human' (Upload) or 'ai'/'tech' (Generate). For a human artifact we store the real file
   // the user picked; for a generated one we write a small placeholder document so "View" opens
@@ -135,7 +165,8 @@ export function ProtoDataProvider({ children }) {
     setUserFinishes(prev => (prev.includes(name) ? prev : (() => { const next = [...prev, name]; kvSet(K.userFinishes, next); return next; })()));
   }, []);
 
-  const rows = sampleDataOn ? [...userRows, ...ROWS] : [...userRows];
+  const applyOverride = (r) => (rowOverrides[r.id] ? { ...r, ...rowOverrides[r.id] } : r);
+  const rows = (sampleDataOn ? [...userRows, ...ROWS] : [...userRows]).map(applyOverride);
   const customers = sampleDataOn ? [...userCustomers, ...INITIAL_CUSTOMERS] : [...userCustomers];
   const partLibrary = { ...(sampleDataOn ? PART_LIBRARY : {}), ...userPartLibrary };
 
@@ -147,7 +178,7 @@ export function ProtoDataProvider({ children }) {
     materials, finishes, addMaterial, addFinish,
     findRow: (id) => rows.find(r => r.id === id),
     findOrder: (orderId) => rows.find(r => r.orderId === orderId),
-    addCustomer, createEnquiry,
+    addCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote,
     artifactState, markArtifactDone, openArtifactFile, openFile,
     getClientReleased, toggleClientRelease,
   };

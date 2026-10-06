@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { StatusBadge } from '../components/Badges';
 import DownloadLink from '../components/DownloadLink';
 import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
+import EditQuoteModal from '../components/EditQuoteModal';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
 function TrialJobDetail({ r }) {
   const navigate = useNavigate();
+  const { convertToOrder } = useProtoData();
+  const linkToOrder = () => navigate(`/proto/orders/${convertToOrder(r.id)}`);
   return (
     <div>
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
@@ -17,7 +20,7 @@ function TrialJobDetail({ r }) {
         <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /><span className="badge b-neutral">NO CUSTOMER ORDER</span></div>
         <div className="head-actions">
           <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
-          <button type="button" className="btn px-btn-primary">Link to a customer order</button>
+          <button type="button" className="btn px-btn-primary" onClick={linkToOrder}>Link to a customer order</button>
         </div>
       </div>
       <div className="stub-note">
@@ -52,11 +55,22 @@ function TrialJobDetail({ r }) {
 export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { findRow, openFile } = useProtoData();
+  const { findRow, openFile, convertToOrder, markNoOrderJob } = useProtoData();
   const r = findRow(id);
+  const [showEditQuote, setShowEditQuote] = useState(false);
+
+  // Once converted this id belongs under /orders/:orderId — if something still links to the old
+  // /enquiries/:id (e.g. a bookmark, or clicking Convert to order from here), follow it there.
+  useEffect(() => {
+    if (r && r.isOrder) navigate(`/proto/orders/${r.orderId}`, { replace: true });
+  }, [r, navigate]);
+
   if (!r) return <div className="empty-hint">Enquiry not found.</div>;
+  if (r.isOrder) return null;
   if (r.jobType === 'TRIAL') return <TrialJobDetail r={r} />;
   const part = r.parts[0];
+
+  const convert = () => navigate(`/proto/orders/${convertToOrder(r.id)}`);
 
   return (
     <div>
@@ -64,8 +78,9 @@ export default function EnquiryDetail() {
       <div className="detail-head">
         <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /></div>
         <div className="head-actions">
-          <button type="button" className="btn btn-ghost">Edit quote</button>
-          <button type="button" className="btn px-btn-primary">Convert to order</button>
+          <button type="button" className="btn btn-ghost" onClick={() => setShowEditQuote(true)}>Edit quote</button>
+          <button type="button" className="btn btn-ghost" onClick={() => markNoOrderJob(r.id)}>Produce without a confirmed order</button>
+          <button type="button" className="btn px-btn-primary" onClick={convert}>Convert to order</button>
         </div>
       </div>
       <div className="grid2">
@@ -78,11 +93,12 @@ export default function EnquiryDetail() {
               <dt>Parts</dt><dd>{r.parts.length}</dd>
               <dt>Quote status</dt><dd><StatusBadge status={r.status} /></dd>
             </dl>
+            {r.remarks && <dl className="kv" style={{ marginTop: 10 }}><dt>Remarks</dt><dd>{r.remarks}</dd></dl>}
           </div>
           <div className="card">
             <h2><Icon name="box" /> Parts</h2>
             {r.parts.map(p => (
-              <div className="part-row" key={p.name}>
+              <div className="part-row" key={p.tmpl || p.name}>
                 <div className="part-row-head"><span className="name">{p.name}</span><button type="button" className="btn-text" onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D <Icon name="cad" size={14} /></button></div>
                 <div className="mini-grid">
                   <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
@@ -109,6 +125,7 @@ export default function EnquiryDetail() {
           </div>
         </div>
       </div>
+      {showEditQuote && <EditQuoteModal row={r} onClose={() => setShowEditQuote(false)} />}
     </div>
   );
 }
