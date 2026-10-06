@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
-// Every earlier version of a part's drawing/finish/remarks, oldest first as superseded — never
-// deleted, only appended to by UpdatePartModal. Collapsed by default since most parts have none.
+// Every earlier version of a part — qty, material, finish, CAD file, drawing, remarks — oldest
+// first as superseded, never deleted, only appended to by UpdateEnquiryModal. Collapsed by default
+// since most parts have none.
 export default function RevisionHistory({ part }) {
   const { openFile, downloadFile } = useProtoData();
   const [open, setOpen] = useState(false);
@@ -16,29 +17,35 @@ export default function RevisionHistory({ part }) {
         {open ? 'Hide' : 'Show'} {revisions.length} earlier version{revisions.length === 1 ? '' : 's'}
       </button>
       {open && (
-        <div className="tablecard overflow-x" style={{ marginTop: 8, marginBottom: 0 }}>
-          <table className="data">
-            <thead><tr><th>Received</th><th>Drawing</th><th>Finish</th><th>Remarks</th><th>Note</th></tr></thead>
-            <tbody>
-              {revisions.map((rv, i) => (
-                <tr key={i}>
-                  <td className="cell-sub">{fmtDate(rv.at.slice(0, 10))}</td>
-                  <td>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          {revisions.map((rv, i) => (
+            <div key={i} className="part-row" style={{ background: 'var(--shell-bg)' }}>
+              <div className="part-row-head"><span className="cell-sub">Replaced {fmtDate(rv.at.slice(0, 10))}</span></div>
+              <div className="mini-grid">
+                <div><span className="ml">Material</span><span className="mv">{rv.material}</span></div>
+                <div><span className="ml">Qty</span><span className="mv">{rv.qty}</span></div>
+                <div><span className="ml">Finish</span><span className="mv">{rv.finish}</span></div>
+                <div>
+                  <span className="ml">CAD file</span>
+                  <span className="mv">{rv.fileKey ? (<><button type="button" className="btn-text" onClick={() => downloadFile(rv.fileKey)}>{rv.file}</button></>) : '—'}</span>
+                </div>
+                <div>
+                  <span className="ml">Drawing</span>
+                  <span className="mv">
                     {rv.drawingFileKey ? (
                       <>
-                        <div className="cell-sub">{rv.drawingFileName}</div>
-                        <button type="button" className="btn-text" onClick={() => openFile(rv.drawingFileKey)}>View</button>
-                        {' '}<button type="button" className="btn-text" onClick={() => downloadFile(rv.drawingFileKey)}>Download</button>
+                        {rv.drawingFileName}{' '}
+                        <button type="button" className="btn-text" onClick={() => openFile(rv.drawingFileKey)}>View</button>{' '}
+                        <button type="button" className="btn-text" onClick={() => downloadFile(rv.drawingFileKey)}>Download</button>
                       </>
-                    ) : <span className="cell-sub">—</span>}
-                  </td>
-                  <td>{rv.finish}</td>
-                  <td className="cell-sub">{rv.remarks || '—'}</td>
-                  <td className="cell-sub">{rv.note || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    ) : '—'}
+                  </span>
+                </div>
+                <div><span className="ml">Remarks then</span><span className="mv">{rv.remarks || '—'}</span></div>
+              </div>
+              {rv.note && <div className="cell-sub" style={{ marginTop: 8 }}>Note: {rv.note}</div>}
+            </div>
+          ))}
         </div>
       )}
     </div>

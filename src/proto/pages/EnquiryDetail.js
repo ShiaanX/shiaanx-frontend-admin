@@ -5,7 +5,7 @@ import { StatusBadge } from '../components/Badges';
 import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
 import AutoQuoteModal from '../components/AutoQuoteModal';
-import UpdatePartModal from '../components/UpdatePartModal';
+import UpdateEnquiryModal from '../components/UpdateEnquiryModal';
 import RevisionHistory from '../components/RevisionHistory';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
@@ -59,7 +59,7 @@ export default function EnquiryDetail() {
   const { findRow, openFile, downloadFile, convertToOrder, markNoOrderJob, uploadManualQuote } = useProtoData();
   const r = findRow(id);
   const [quotingPart, setQuotingPart] = useState(null); // part index, or null
-  const [updatingPart, setUpdatingPart] = useState(null); // part index, or null
+  const [showUpdate, setShowUpdate] = useState(false);
   const manualQuoteInput = useRef(null);
 
   // Once converted this id belongs under /orders/:orderId — if something still links to the old
@@ -85,6 +85,7 @@ export default function EnquiryDetail() {
       <div className="detail-head">
         <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /></div>
         <div className="head-actions">
+          <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost" onClick={() => markNoOrderJob(r.id)}>Produce without a confirmed order</button>
           <button type="button" className="btn px-btn-primary" onClick={convert}>Convert to order</button>
         </div>
@@ -113,10 +114,7 @@ export default function EnquiryDetail() {
               <div className="part-row" key={p.tmpl || p.name}>
                 <div className="part-row-head">
                   <span className="name">{p.name}</span>
-                  <div style={{ display: 'flex', gap: 14 }}>
-                    <button type="button" className="btn-text" onClick={() => setQuotingPart(i)}><Icon name="quote" size={14} /> Auto-quote</button>
-                    <button type="button" className="btn-text" onClick={() => setUpdatingPart(i)}><Icon name="upload" size={14} /> Update</button>
-                  </div>
+                  <button type="button" className="btn-text" onClick={() => setQuotingPart(i)}><Icon name="quote" size={14} /> Auto-quote</button>
                 </div>
                 <div className="mini-grid">
                   <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
@@ -182,7 +180,7 @@ export default function EnquiryDetail() {
         </div>
       </div>
       {quotingPart !== null && <AutoQuoteModal row={r} partIndex={quotingPart} onClose={() => setQuotingPart(null)} />}
-      {updatingPart !== null && <UpdatePartModal row={r} partIndex={updatingPart} onClose={() => setUpdatingPart(null)} />}
+      {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
     </div>
   );
 }

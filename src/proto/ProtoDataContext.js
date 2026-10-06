@@ -150,39 +150,80 @@ export function ProtoDataProvider({ children }) {
     });
   }, []);
 
-  // A client sending a revised drawing, or a finish/remarks change, after the enquiry was created.
-  // The earlier drawing and values are kept as a revision entry on the part — never overwritten —
-  // so the full history of what was received stays visible; only the "current" fields (read by
-  // Documents received, Part Workspace, CAM, etc.) move to the new values. Takes the current `row`
-  // object (as returned by `rows`/`findRow`) rather than looking it up itself.
-  const updatePartRevision = useCallback(async (row, partIndex, { drawingFile, finish, remarks, note }) => {
-    const part = row.parts[partIndex];
+  // One combined "the client sent updates" action for the whole enquiry, mirroring the New Enquiry
+  // form filled in with the current values: any of a part's qty/material/finish/CAD file/drawing
+  // can change, remarks can change, and new parts can be added in the same pass. Nothing is
+  // overwritten — each changed existing part gets its prior qty/material/finish/CAD/drawing/remarks
+  // appended to that part's revisions[] before the new values replace them; a brand-new part is just
+  // added. Takes the current `row` object (from `rows`/`findRow`) rather than looking it up itself.
+  //
+  // `formParts` entries: existing ones carry {existing:true, originalIndex, qty, material, finish,
+  // cadFile?, drawingFile?}; newly added ones carry {existing:false, partName, qty, material,
+  // finish, cadFile?, drawingFile?}.
+  const applyEnquiryUpdate = useCallback(async (row, { remarks, parts: formParts, note }) => {
     const at = new Date().toISOString();
+    const newParts = [];
+    const libraryPatches = {};
+    const newLibraryEntries = {};
 
-    let drawingFileKey = part.drawingFileKey;
-    let drawingFileName = part.drawingFileName;
-    if (drawingFile) {
-      drawingFileKey = `${row.id}:drawing:${partIndex}:${Date.now().toString(36)}`;
-      drawingFileName = drawingFile.name;
-      await fileSave(drawingFileKey, drawingFile);
+    for (let i = 0; i < formParts.length; i++) {
+      const fp = formParts[i];
+      if (fp.existing) {
+        const orig = row.parts[fp.originalIndex];
+        const qty = Number(fp.qty) || orig.qty;
+        const material = fp.material || orig.material;
+        const finish = fp.finish || orig.finish;
+
+        let fileKey = orig.fileKey, fileName = orig.file;
+        if (fp.cadFile) {
+          fileKey = `${row.id}:cad:${fp.originalIndex}:${Date.now().toString(36)}`;
+          fileName = fp.cadFile.name;
+          await fileSave(fileKey, fp.cadFile);
+        }
+        let drawingFileKey = orig.drawingFileKey, drawingFileName = orig.drawingFileName;
+        if (fp.drawingFile) {
+          drawingFileKey = `${row.id}:drawing:${fp.originalIndex}:${Date.now().toString(36)}`;
+          drawingFileName = fp.drawingFile.name;
+          await fileSave(drawingFileKey, fp.drawingFile);
+        }
+
+        const changed = qty !== orig.qty || material !== orig.material || finish !== orig.finish || !!fp.cadFile || !!fp.drawingFile;
+        const revisions = changed
+          ? [...(orig.revisions || []), {
+              at, note: note || '',
+              qty: orig.qty, material: orig.material, finish: orig.finish,
+              file: orig.file, fileKey: orig.fileKey,
+              drawingFileKey: orig.drawingFileKey, drawingFileName: orig.drawingFileName,
+              remarks: row.remarks,
+            }]
+          : (orig.revisions || []);
+
+        const updated = { ...orig, qty, material, finish, file: fileName, fileKey, drawingFileKey, drawingFileName, revisions };
+        newParts.push(updated);
+        libraryPatches[orig.tmpl] = { material, finish, cadFileKey: fileKey, drawingFileKey, drawingFileName };
+      } else {
+        const tmpl = nextId('TMPL-USER');
+        let fileKey = null, fileName = 'Not uploaded';
+        if (fp.cadFile) { fileKey = `${row.id}:cad:new:${tmpl}`; fileName = fp.cadFile.name; await fileSave(fileKey, fp.cadFile); }
+        let drawingFileKey = null, drawingFileName = null;
+        if (fp.drawingFile) { drawingFileKey = `${row.id}:drawing:new:${tmpl}`; drawingFileName = fp.drawingFile.name; await fileSave(drawingFileKey, fp.drawingFile); }
+        const name = fp.partName || `Untitled part ${i + 1}`;
+        newParts.push({ tmpl, name, material: fp.material, qty: Number(fp.qty) || 1, finish: fp.finish, file: fileName, fileKey, drawingFileKey, drawingFileName });
+        newLibraryEntries[tmpl] = {
+          name, customer: row.customer, rev: '1', programSource: 'Enquiry stage',
+          setups: 'Not yet planned', operations: '—', stock: '—', planStatus: 'PENDING',
+          datums: null, dims: null, fixture: null, cadFileKey: fileKey, drawingFileKey, drawingFileName,
+        };
+      }
     }
-    const newFinish = finish || part.finish;
+
     const remarksChanged = remarks !== undefined && remarks !== row.remarks;
-
-    // Snapshot of what's being superseded, not what's new — so the revision list reads as a log of
-    // what the part used to be.
-    const revision = {
-      at, note: note || '',
-      drawingFileKey: part.drawingFileKey, drawingFileName: part.drawingFileName,
-      finish: part.finish, remarks: row.remarks,
-    };
-    const newParts = row.parts.map((p, i) => (i === partIndex
-      ? { ...p, drawingFileKey, drawingFileName, finish: newFinish, revisions: [...(p.revisions || []), revision] }
-      : p));
-
     patchRow(row.id, { parts: newParts, ...(remarksChanged ? { remarks } : {}) });
-    patchPartLibrary(part.tmpl, { drawingFileKey, drawingFileName, finish: newFinish });
-  }, [patchRow, patchPartLibrary]);
+    Object.entries(libraryPatches).forEach(([tmpl, patch]) => patchPartLibrary(tmpl, patch));
+    if (Object.keys(newLibraryEntries).length) {
+      setUserPartLibrary(prev => { const next = { ...prev, ...newLibraryEntries }; kvSet(K.userPartLibrary, next); return next; });
+    }
+  }, [nextId, patchRow, patchPartLibrary]);
 
   // Turns any enquiry row into an order — generates an order id and switches it over, same as a
   // real "Convert to order" would. Works on a sample row too, so the flow can be tried end to end.
@@ -332,7 +373,7 @@ export function ProtoDataProvider({ children }) {
     findRow: (id) => rows.find(r => r.id === id),
     findOrder: (orderId) => rows.find(r => r.orderId === orderId),
     addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote, setPartStatus,
-    updatePartRevision,
+    applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,

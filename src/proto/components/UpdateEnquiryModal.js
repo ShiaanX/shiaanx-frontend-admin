@@ -1,0 +1,89 @@
+import React, { useState } from 'react';
+import Icon from '../icons';
+import Modal from './Modal';
+import Dropzone from './Dropzone';
+import EditableSelect from './EditableSelect';
+import { useProtoData } from '../ProtoDataContext';
+
+const existingPartForm = (p, i) => ({
+  key: `existing-${i}`, existing: true, originalIndex: i,
+  partName: p.name, qty: p.qty, material: p.material, finish: p.finish, cadFile: null, drawingFile: null,
+});
+const newPartForm = () => ({
+  key: Math.random().toString(36).slice(2), existing: false,
+  partName: '', qty: 1, material: 'Aluminium 6061', finish: 'As machined', cadFile: null, drawingFile: null,
+});
+
+// The same form as New Enquiry, pre-filled with this enquiry's current values — for when the
+// client sends updates: a new drawing, a different quantity or material, or an extra part type
+// altogether. Only what's actually changed moves; nothing on an existing part is deleted — the
+// current qty/material/finish/CAD/drawing it's replacing is kept in that part's revision history
+// (ProtoDataContext.applyEnquiryUpdate).
+export default function UpdateEnquiryModal({ row, onClose }) {
+  const { materials, finishes, addMaterial, addFinish, applyEnquiryUpdate } = useProtoData();
+  const [parts, setParts] = useState(row.parts.map(existingPartForm));
+  const [remarks, setRemarks] = useState(row.remarks || '');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const updatePart = (key, patch) => setParts(prev => prev.map(p => (p.key === key ? { ...p, ...patch } : p)));
+  const addPart = () => setParts(prev => [...prev, newPartForm()]);
+  const removePart = (key) => setParts(prev => prev.filter(p => p.key !== key));
+
+  const hasAPartName = parts.every(p => (p.existing ? true : p.partName.trim())) && parts.length > 0;
+  const save = async () => {
+    setSaving(true);
+    await applyEnquiryUpdate(row, { remarks, parts, note });
+    onClose();
+  };
+
+  return (
+    <Modal
+      title={`Update ${row.id}`}
+      maxWidth={640}
+      onClose={onClose}
+      footer={<>
+        <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn px-btn-primary" disabled={!hasAPartName || saving} onClick={save}>
+          {saving ? 'Saving…' : 'Save update'}
+        </button>
+      </>}
+    >
+      <p className="page-sub" style={{ margin: 0 }}>
+        Edit whatever's changed below — a revised drawing, a different quantity or material, or add a new part type entirely. Anything you replace on an existing part is kept in that part's revision history, not deleted.
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {parts.map((p, i) => (
+          <div className="inline-add" key={p.key}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <b style={{ fontSize: 12.5 }}>{p.existing ? row.parts[p.originalIndex].name : `New part ${i + 1}`}</b>
+              {!p.existing && <button type="button" className="btn-sm text" onClick={() => removePart(p.key)}>Remove</button>}
+            </div>
+            {!p.existing && (
+              <div className="field"><label>Part name</label><input value={p.partName} onChange={e => updatePart(p.key, { partName: e.target.value })} placeholder="e.g. Bracket, Base Plate" /></div>
+            )}
+            <div className="field-row">
+              <div className="field"><label>Quantity</label><input type="number" value={p.qty} onChange={e => updatePart(p.key, { qty: e.target.value })} min={1} /></div>
+              <EditableSelect label="Material" options={materials} value={p.material} onChange={(v) => updatePart(p.key, { material: v })} onAdd={addMaterial} placeholder="e.g. Titanium Grade 5" />
+            </div>
+            <EditableSelect label="Finish" options={finishes} value={p.finish} onChange={(v) => updatePart(p.key, { finish: v })} onAdd={addFinish} placeholder="e.g. Chromate conversion" />
+            <Dropzone
+              label={`CAD file (.step/.stp)${p.existing && row.parts[p.originalIndex].fileKey ? ` — current: ${row.parts[p.originalIndex].file}` : ''}`}
+              accept=".step,.stp" file={p.cadFile} onChange={(f) => updatePart(p.key, { cadFile: f })}
+            />
+            <Dropzone
+              label={`Drawing (.pdf)${p.existing && row.parts[p.originalIndex].drawingFileKey ? ` — current: ${row.parts[p.originalIndex].drawingFileName}` : ''}`}
+              accept=".pdf" file={p.drawingFile} onChange={(f) => updatePart(p.key, { drawingFile: f })}
+            />
+          </div>
+        ))}
+        <button type="button" className="btn btn-ghost" onClick={addPart}><Icon name="plus" /> Add another part type</button>
+      </div>
+
+      <div className="field"><label>Remarks</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Anything the team should know about this enquiry…" /></div>
+      <div className="field"><label>What changed (optional note)</label><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Client sent Rev B drawings and dropped Part B's quantity to 3" /></div>
+      {!hasAPartName && <p className="page-sub" style={{ margin: 0 }}>Every new part needs a name.</p>}
+    </Modal>
+  );
+}
