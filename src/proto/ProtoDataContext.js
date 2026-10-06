@@ -12,7 +12,8 @@ const K = {
   userRows: 'userRows', userCustomers: 'userCustomers', userPartLibrary: 'userPartLibrary',
   artifactState: 'artifactState', clientReleased: 'clientReleased', sampleDataOn: 'sampleDataOn',
   userMaterials: 'userMaterials', userFinishes: 'userFinishes', rowOverrides: 'rowOverrides',
-  partStatusOverrides: 'partStatusOverrides',
+  partStatusOverrides: 'partStatusOverrides', customerOverrides: 'customerOverrides', deletedCustomers: 'deletedCustomers',
+  autoQuoteState: 'autoQuoteState',
 };
 
 export function ProtoDataProvider({ children }) {
@@ -32,6 +33,14 @@ export function ProtoDataProvider({ children }) {
   // part the same way rowOverrides layers onto a row — so a dragged status shows up everywhere that
   // part appears (the board, the order's Closed-loop card), not just on the board itself.
   const [partStatusOverrides, setPartStatusOverrides] = useState({});
+  // Same pattern again, keyed by customer name: Edit/Delete in Customers works on a sample customer
+  // (to try it) or one you added, through one path instead of two.
+  const [customerOverrides, setCustomerOverrides] = useState({});
+  const [deletedCustomers, setDeletedCustomers] = useState([]);
+  // {rowId: {partIndex: {data, status}}} — the same shape as shiaanx-backend's
+  // enquiry_parts.auto_quote_data / auto_quote_status, so this maps onto the real schema later
+  // instead of its own invented one.
+  const [autoQuoteState, setAutoQuoteState] = useState({});
   const [loaded, setLoaded] = useState(false);
   const seq = useRef(0);
 
@@ -47,6 +56,9 @@ export function ProtoDataProvider({ children }) {
       setUserFinishes(await kvGet(K.userFinishes, []));
       setRowOverrides(await kvGet(K.rowOverrides, {}));
       setPartStatusOverrides(await kvGet(K.partStatusOverrides, {}));
+      setCustomerOverrides(await kvGet(K.customerOverrides, {}));
+      setDeletedCustomers(await kvGet(K.deletedCustomers, []));
+      setAutoQuoteState(await kvGet(K.autoQuoteState, {}));
       setLoaded(true);
     })();
   }, []);
@@ -58,6 +70,23 @@ export function ProtoDataProvider({ children }) {
 
   const addCustomer = useCallback((c) => {
     setUserCustomers(prev => { const next = [...prev, c]; kvSet(K.userCustomers, next); return next; });
+  }, []);
+
+  const updateCustomer = useCallback((name, patch) => {
+    setCustomerOverrides(prev => {
+      const next = { ...prev, [name]: { ...(prev[name] || {}), ...patch } };
+      kvSet(K.customerOverrides, next);
+      return next;
+    });
+  }, []);
+
+  const deleteCustomer = useCallback((name) => {
+    setDeletedCustomers(prev => {
+      if (prev.includes(name)) return prev;
+      const next = [...prev, name];
+      kvSet(K.deletedCustomers, next);
+      return next;
+    });
   }, []);
 
   // Builds the enquiry row — one or more parts — plus a matching Part Workspace entry for each
@@ -127,6 +156,52 @@ export function ProtoDataProvider({ children }) {
 
   const updateQuote = useCallback((id, patch) => patchRow(id, patch), [patchRow]);
 
+  const getAutoQuote = useCallback((rowId, partIndex) => (autoQuoteState[rowId] || {})[partIndex] || null, [autoQuoteState]);
+
+  // Fills the same field shape insta_quote/server.py's /process endpoint returns (and
+  // enquiry_parts.auto_quote_data stores), but with sensible defaults rather than real geometry —
+  // there's no backend here to run the actual CAPP pipeline. Only runs when you click it.
+  const generateAutoQuote = useCallback((rowId, partIndex, part) => {
+    const data = {
+      partName: part.name, quantity: part.qty || 1, materialName: part.material,
+      setupCount: 1, stepCount: 6, cycleTimeMin: 12, uniqueOperations: 4, weightedFeatures: 6,
+      featureCount: 4, faceMillCount: 1, circularInterpCount: 0, contourMillCount: 1,
+      stockMassKg: 0.5, partMassKg: 0.35, removedMassKg: 0.15,
+      stockX: 100, stockY: 80, stockZ: 20,
+      materialRate: /aluminium/i.test(part.material || '') ? 420 : 150,
+      machineRate: 400, setupTimePerSetupMin: 30, setupCostPerMin: 25, fixtureCost: 0,
+      inspectionBaseHours: 1, inspectionPerSetupHours: 0.35, inspectionPerFeatureHours: 0.03,
+      inspectionRateCmm: 1000, inspectionRateManual: 600,
+      packagingCost: 1500, shippingCost: 1500, miscCost: 350, gstPercent: 18,
+      inspectionType: 'Manual Inspection', packagingType: 'Wooden Box', shippingType: 'Train',
+      notes: 'Starting values only — fill in the real figures for this part before sending.',
+      finishes: [], secondaryOps: [], extraCharges: [], _source: 'placeholder',
+    };
+    setAutoQuoteState(prev => {
+      const next = { ...prev, [rowId]: { ...(prev[rowId] || {}), [partIndex]: { data, status: 'DRAFT' } } };
+      kvSet(K.autoQuoteState, next);
+      return next;
+    });
+    return data;
+  }, []);
+
+  const saveAutoQuote = useCallback((rowId, partIndex, data, finalize) => {
+    setAutoQuoteState(prev => {
+      const next = { ...prev, [rowId]: { ...(prev[rowId] || {}), [partIndex]: { data, status: finalize ? 'FINALIZED' : 'DRAFT' } } };
+      kvSet(K.autoQuoteState, next);
+      return next;
+    });
+    if (finalize) patchRow(rowId, { status: 'QUOTED' });
+  }, [patchRow]);
+
+  // A manual quote — an Excel sheet or PDF put together outside the auto-quote tool — attached to
+  // the enquiry directly, as an alternative to building a line-item quote in the app.
+  const uploadManualQuote = useCallback(async (rowId, file) => {
+    const fileKey = `${rowId}:manualQuote`;
+    await fileSave(fileKey, file);
+    patchRow(rowId, { manualQuoteFileKey: fileKey, manualQuoteFileName: file.name, status: 'QUOTED' });
+  }, [patchRow]);
+
   // Dragging a Production Board card to a new column.
   const setPartStatus = useCallback((rowId, partIndex, status) => {
     setPartStatusOverrides(prev => {
@@ -192,7 +267,9 @@ export function ProtoDataProvider({ children }) {
     return out;
   };
   const rows = (sampleDataOn ? [...userRows, ...ROWS] : [...userRows]).map(applyOverride);
-  const customers = sampleDataOn ? [...userCustomers, ...INITIAL_CUSTOMERS] : [...userCustomers];
+  const customers = (sampleDataOn ? [...userCustomers, ...INITIAL_CUSTOMERS] : [...userCustomers])
+    .filter(c => !deletedCustomers.includes(c.name))
+    .map(c => (customerOverrides[c.name] ? { ...c, ...customerOverrides[c.name] } : c));
   const partLibrary = { ...(sampleDataOn ? PART_LIBRARY : {}), ...userPartLibrary };
 
   const materials = [...MATERIAL_OPTIONS, ...userMaterials];
@@ -203,7 +280,8 @@ export function ProtoDataProvider({ children }) {
     materials, finishes, addMaterial, addFinish,
     findRow: (id) => rows.find(r => r.id === id),
     findOrder: (orderId) => rows.find(r => r.orderId === orderId),
-    addCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote, setPartStatus,
+    addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote, setPartStatus,
+    getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,
   };

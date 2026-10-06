@@ -4,6 +4,7 @@ import Icon from '../icons';
 import Modal from './Modal';
 import Dropzone from './Dropzone';
 import EditableSelect from './EditableSelect';
+import CustomerFields from './CustomerFields';
 import { useProtoData } from '../ProtoDataContext';
 
 const emptyPart = () => ({ key: Math.random().toString(36).slice(2), partName: '', qty: 1, material: 'Aluminium 6061', finish: 'As machined', cadFile: null });
@@ -25,7 +26,7 @@ export default function NewEnquiryModal({ onClose }) {
   const navigate = useNavigate();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [customerName, setCustomerName] = useState('');
-  const [qa, setQa] = useState({ name: '', company: '', email: '', phone: '' });
+  const [qa, setQa] = useState({ name: '', company: '', email: '', website: '', phone: '' });
   const [parts, setParts] = useState([emptyPart()]);
   const [drawingFile, setDrawingFile] = useState(null);
   const [remarks, setRemarks] = useState('');
@@ -33,7 +34,7 @@ export default function NewEnquiryModal({ onClose }) {
 
   const saveQuickAdd = () => {
     const name = qa.name.trim() || 'New customer';
-    addCustomer({ name, company: qa.company || name, email: qa.email, phone: qa.phone });
+    addCustomer({ name, company: qa.company || name, email: qa.email, website: qa.website, phone: qa.phone });
     setCustomerName(name);
     setShowQuickAdd(false);
   };
@@ -76,14 +77,7 @@ export default function NewEnquiryModal({ onClose }) {
       </div>
       {showQuickAdd && (
         <div className="inline-add">
-          <div className="field-row">
-            <div className="field"><label>Customer / contact name</label><input value={qa.name} onChange={e => setQa(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Priya Sharma" /></div>
-            <div className="field"><label>Company</label><input value={qa.company} onChange={e => setQa(f => ({ ...f, company: e.target.value }))} placeholder="e.g. Client A Defence Systems" /></div>
-          </div>
-          <div className="field-row">
-            <div className="field"><label>Email</label><input type="email" value={qa.email} onChange={e => setQa(f => ({ ...f, email: e.target.value }))} placeholder="name@company.com" /></div>
-            <div className="field"><label>Phone</label><input value={qa.phone} onChange={e => setQa(f => ({ ...f, phone: e.target.value }))} placeholder="+91-9876543210" /></div>
-          </div>
+          <CustomerFields form={qa} setForm={setQa} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button type="button" className="btn-sm text" onClick={() => setShowQuickAdd(false)}>Cancel</button>
             <button type="button" className="btn-sm primary" onClick={saveQuickAdd}>Save customer</button>

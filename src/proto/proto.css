@@ -148,12 +148,16 @@
 .proto-app .mini-grid .ml { color: var(--muted); display: block; margin-bottom: 2px; }
 .proto-app .mini-grid .mv { font-weight: 600; }
 
-.proto-app .doc-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.proto-app .doc-row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .proto-app .doc-row:last-child { border-bottom: 0; }
 .proto-app .doc-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--primary-light); color: var(--primary); display: grid; place-items: center; flex-shrink: 0; }
+/* The untyped name/sub block between the icon and the actions — give it room to shrink and wrap a
+   long filename instead of pushing the action buttons out past the card edge. */
+.proto-app .doc-row > div:nth-child(2) { flex: 1 1 160px; min-width: 0; }
+.proto-app .doc-name { overflow-wrap: anywhere; }
 .proto-app .doc-name { font-weight: 600; font-size: 13px; }
 .proto-app .doc-sub { color: var(--muted); font-size: 11.5px; }
-.proto-app .doc-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.proto-app .doc-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
 .proto-app .toggle { position: relative; width: 38px; height: 21px; border-radius: 20px; background: var(--border); cursor: pointer; flex-shrink: 0; transition: background .15s; border: 0; padding: 0; }
 .proto-app .toggle::after { content: ''; position: absolute; width: 17px; height: 17px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
 .proto-app .toggle.on { background: var(--ok); }
@@ -230,9 +234,11 @@
 .proto-app .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .proto-app .modal-foot { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
 .proto-app .phone-field { display: flex; align-items: center; gap: 6px; }
-.proto-app .phone-cc { width: 58px; flex-shrink: 0; text-align: center; }
-.proto-app .phone-dash { color: var(--muted); font-weight: 700; }
-.proto-app .phone-num { flex: 1; }
+/* Higher specificity than ".field input" (which sets width:100% on every input in a .field) so the
+   fixed-width country-code box and the flexible number box actually hold their sizes. */
+.proto-app .phone-field input.phone-cc { width: 58px; flex: 0 0 58px; text-align: center; }
+.proto-app .phone-dash { color: var(--muted); font-weight: 700; flex-shrink: 0; }
+.proto-app .phone-field input.phone-num { flex: 1; min-width: 0; width: auto; }
 
 .proto-app .dropzone { border: 1.5px dashed var(--border); border-radius: 10px; padding: 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; background: var(--shell-bg); transition: border-color .12s, background .12s; }
 .proto-app .dropzone:hover, .proto-app .dropzone.over { border-color: var(--primary); background: var(--primary-light); }

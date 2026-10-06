@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { StatusBadge } from '../components/Badges';
 import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
-import EditQuoteModal from '../components/EditQuoteModal';
+import AutoQuoteModal from '../components/AutoQuoteModal';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
@@ -54,9 +54,10 @@ function TrialJobDetail({ r }) {
 export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { findRow, openFile, downloadFile, convertToOrder, markNoOrderJob } = useProtoData();
+  const { findRow, openFile, downloadFile, convertToOrder, markNoOrderJob, uploadManualQuote } = useProtoData();
   const r = findRow(id);
-  const [showEditQuote, setShowEditQuote] = useState(false);
+  const [quotingPart, setQuotingPart] = useState(null); // part index, or null
+  const manualQuoteInput = useRef(null);
 
   // Once converted this id belongs under /orders/:orderId — if something still links to the old
   // /enquiries/:id (e.g. a bookmark, or clicking Convert to order from here), follow it there.
@@ -69,6 +70,11 @@ export default function EnquiryDetail() {
   if (r.jobType === 'TRIAL') return <TrialJobDetail r={r} />;
 
   const convert = () => navigate(`/proto/orders/${convertToOrder(r.id)}`);
+  const onManualQuoteChosen = (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) uploadManualQuote(r.id, file);
+  };
 
   return (
     <div>
@@ -76,7 +82,6 @@ export default function EnquiryDetail() {
       <div className="detail-head">
         <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /></div>
         <div className="head-actions">
-          <button type="button" className="btn btn-ghost" onClick={() => setShowEditQuote(true)}>Edit quote</button>
           <button type="button" className="btn btn-ghost" onClick={() => markNoOrderJob(r.id)}>Produce without a confirmed order</button>
           <button type="button" className="btn px-btn-primary" onClick={convert}>Convert to order</button>
         </div>
@@ -92,12 +97,24 @@ export default function EnquiryDetail() {
               <dt>Quote status</dt><dd><StatusBadge status={r.status} /></dd>
             </dl>
             {r.remarks && <dl className="kv" style={{ marginTop: 10 }}><dt>Remarks</dt><dd>{r.remarks}</dd></dl>}
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+              <input ref={manualQuoteInput} type="file" accept=".xlsx,.xls,.csv,.pdf" style={{ display: 'none' }} onChange={onManualQuoteChosen} />
+              <button type="button" className="btn-text" onClick={() => manualQuoteInput.current.click()}>
+                <Icon name="upload" size={14} /> {r.manualQuoteFileKey ? `Replace manual quote (${r.manualQuoteFileName})` : 'Upload a manual quote (Excel/PDF) instead'}
+              </button>
+            </div>
           </div>
           <div className="card">
             <h2><Icon name="box" /> Parts</h2>
-            {r.parts.map(p => (
+            {r.parts.map((p, i) => (
               <div className="part-row" key={p.tmpl || p.name}>
-                <div className="part-row-head"><span className="name">{p.name}</span><button type="button" className="btn-text" onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>Part workspace <Icon name="cad" size={14} /></button></div>
+                <div className="part-row-head">
+                  <span className="name">{p.name}</span>
+                  <div style={{ display: 'flex', gap: 14 }}>
+                    <button type="button" className="btn-text" onClick={() => setQuotingPart(i)}><Icon name="quote" size={14} /> Auto-quote</button>
+                    <button type="button" className="btn-text" onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>Part workspace <Icon name="cad" size={14} /></button>
+                  </div>
+                </div>
                 <div className="mini-grid">
                   <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
                   <div><span className="ml">Quantity</span><span className="mv">{p.qty}</span></div>
@@ -120,7 +137,6 @@ export default function EnquiryDetail() {
                 </div>
                 <div className="doc-actions">
                   <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D</button>
-                  <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => openFile(p.fileKey)}>View</button>
                   <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => downloadFile(p.fileKey)}>Download</button>
                 </div>
               </div>
@@ -136,6 +152,19 @@ export default function EnquiryDetail() {
                 <button type="button" className="btn-text" disabled={!r.drawingFileKey} onClick={() => downloadFile(r.drawingFileKey)}>Download</button>
               </div>
             </div>
+            {r.manualQuoteFileKey && (
+              <div className="doc-row">
+                <div className="doc-icon"><Icon name="doc" /></div>
+                <div>
+                  <div className="doc-name">{r.manualQuoteFileName}</div>
+                  <div className="doc-sub">Manual quote</div>
+                </div>
+                <div className="doc-actions">
+                  <button type="button" className="btn-text" onClick={() => openFile(r.manualQuoteFileKey)}>View</button>
+                  <button type="button" className="btn-text" onClick={() => downloadFile(r.manualQuoteFileKey)}>Download</button>
+                </div>
+              </div>
+            )}
           </div>
           <div className="card">
             <h2>Status history</h2>
@@ -146,7 +175,7 @@ export default function EnquiryDetail() {
           </div>
         </div>
       </div>
-      {showEditQuote && <EditQuoteModal row={r} onClose={() => setShowEditQuote(false)} />}
+      {quotingPart !== null && <AutoQuoteModal row={r} partIndex={quotingPart} onClose={() => setQuotingPart(null)} />}
     </div>
   );
 }

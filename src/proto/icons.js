@@ -2,7 +2,7 @@
 // everywhere else in this app (confirmed in Orders.js, Sidebar.js, etc).
 import {
   FiList, FiBox, FiBarChart2, FiCpu, FiCheckCircle, FiRefreshCw, FiSliders, FiSettings,
-  FiSearch, FiArrowLeft, FiFileText, FiInfo, FiPlus, FiCalendar, FiX, FiUsers, FiDownload, FiUpload,
+  FiSearch, FiArrowLeft, FiFileText, FiInfo, FiPlus, FiCalendar, FiX, FiUsers, FiDownload, FiUpload, FiDollarSign,
 } from 'react-icons/fi';
 
 export const ICONS = {
@@ -26,6 +26,7 @@ export const ICONS = {
   users: FiUsers,
   download: FiDownload,
   upload: FiUpload,
+  quote: FiDollarSign,
 };
 
 export default function Icon({ name, size = 18 }) {
