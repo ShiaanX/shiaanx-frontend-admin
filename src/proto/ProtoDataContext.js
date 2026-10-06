@@ -90,18 +90,13 @@ export function ProtoDataProvider({ children }) {
   }, []);
 
   // Builds the enquiry row — one or more parts — plus a matching Part Workspace entry for each
-  // part, saves any uploaded CAD files / drawing into the file store, and returns the new row's id.
+  // part, saves any uploaded CAD file / drawing into the file store, and returns the new row's id.
+  // Each part keeps its own drawing (a drawing is specific to one part, not shared across the
+  // enquiry) alongside its own CAD file.
   const createEnquiry = useCallback(async (form) => {
     const jobId = nextId('ENQ-USER');
     const today = new Date().toISOString().slice(0, 10);
     const customer = form.customer || 'Unnamed customer';
-
-    let drawingFileKey = null, drawingFileName = null;
-    if (form.drawingFile) {
-      drawingFileKey = `${jobId}:drawing`;
-      drawingFileName = form.drawingFile.name;
-      await fileSave(drawingFileKey, form.drawingFile);
-    }
 
     const parts = [];
     const libraryEntries = {};
@@ -110,10 +105,17 @@ export function ProtoDataProvider({ children }) {
       const tmpl = nextId('TMPL-USER');
       let cadFileKey = null;
       if (p.cadFile) { cadFileKey = `${jobId}:cad:${i}`; await fileSave(cadFileKey, p.cadFile); }
+      let drawingFileKey = null, drawingFileName = null;
+      if (p.drawingFile) {
+        drawingFileKey = `${jobId}:drawing:${i}`;
+        drawingFileName = p.drawingFile.name;
+        await fileSave(drawingFileKey, p.drawingFile);
+      }
       const name = p.partName || `Untitled part ${i + 1}`;
       parts.push({
         tmpl, name, material: p.material, qty: Number(p.qty) || 1,
         finish: p.finish, file: p.cadFile ? p.cadFile.name : 'Not uploaded', fileKey: cadFileKey,
+        drawingFileKey, drawingFileName,
       });
       libraryEntries[tmpl] = {
         name, customer, rev: '1', programSource: 'Enquiry stage',
@@ -122,7 +124,7 @@ export function ProtoDataProvider({ children }) {
       };
     }
 
-    const row = { id: jobId, customer, date: today, status: 'PENDING', isOrder: false, remarks: form.remarks || '', parts, drawingFileKey, drawingFileName };
+    const row = { id: jobId, customer, date: today, status: 'PENDING', isOrder: false, remarks: form.remarks || '', parts };
     setUserRows(prev => { const next = [...prev, row]; kvSet(K.userRows, next); return next; });
     setUserPartLibrary(prev => { const next = { ...prev, ...libraryEntries }; kvSet(K.userPartLibrary, next); return next; });
     return jobId;

@@ -129,29 +129,31 @@ export default function EnquiryDetail() {
           <div className="card">
             <h2><Icon name="doc" /> Documents received</h2>
             {r.parts.map(p => (
-              <div className="doc-row" key={p.tmpl || p.name}>
-                <div className="doc-icon"><Icon name="cad" /></div>
-                <div>
-                  <div className="doc-name">{p.fileKey ? p.file : 'STEP file'}</div>
-                  <div className="doc-sub">{p.fileKey ? `3D model (CAD) · ${p.name}` : '99.7 KB · uploaded by customer'}</div>
+              <React.Fragment key={p.tmpl || p.name}>
+                <div className="doc-row">
+                  <div className="doc-icon"><Icon name="cad" /></div>
+                  <div>
+                    <div className="doc-name">{p.fileKey ? p.file : 'STEP file'}</div>
+                    <div className="doc-sub">{p.fileKey ? `3D model (CAD) · ${p.name}` : '99.7 KB · uploaded by customer'}</div>
+                  </div>
+                  <div className="doc-actions">
+                    <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D</button>
+                    <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => downloadFile(p.fileKey)}>Download</button>
+                  </div>
                 </div>
-                <div className="doc-actions">
-                  <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D</button>
-                  <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => downloadFile(p.fileKey)}>Download</button>
+                <div className="doc-row">
+                  <div className="doc-icon"><Icon name="doc" /></div>
+                  <div>
+                    <div className="doc-name">{p.drawingFileKey ? p.drawingFileName : 'Ballooned drawing.pdf'}</div>
+                    <div className="doc-sub">{p.drawingFileKey ? `2D drawing (PDF) · ${p.name}` : '1 page'}</div>
+                  </div>
+                  <div className="doc-actions">
+                    <button type="button" className="btn-text" disabled={!p.drawingFileKey} onClick={() => openFile(p.drawingFileKey)}>View</button>
+                    <button type="button" className="btn-text" disabled={!p.drawingFileKey} onClick={() => downloadFile(p.drawingFileKey)}>Download</button>
+                  </div>
                 </div>
-              </div>
+              </React.Fragment>
             ))}
-            <div className="doc-row">
-              <div className="doc-icon"><Icon name="doc" /></div>
-              <div>
-                <div className="doc-name">{r.drawingFileKey ? r.drawingFileName : 'Ballooned drawing.pdf'}</div>
-                <div className="doc-sub">{r.drawingFileKey ? '2D drawing (PDF)' : '1 page'}</div>
-              </div>
-              <div className="doc-actions">
-                <button type="button" className="btn-text" disabled={!r.drawingFileKey} onClick={() => openFile(r.drawingFileKey)}>View</button>
-                <button type="button" className="btn-text" disabled={!r.drawingFileKey} onClick={() => downloadFile(r.drawingFileKey)}>Download</button>
-              </div>
-            </div>
             {r.manualQuoteFileKey && (
               <div className="doc-row">
                 <div className="doc-icon"><Icon name="doc" /></div>
