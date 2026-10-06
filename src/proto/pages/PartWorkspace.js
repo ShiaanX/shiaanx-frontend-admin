@@ -18,21 +18,28 @@ function Empty({ children }) {
 export default function PartWorkspace() {
   const params = useParams();
   const navigate = useNavigate();
-  const { partLibrary } = useProtoData();
+  const { partLibrary, rows } = useProtoData();
   const [tab, setTab] = useState('overview');
   const tmplId = partLibrary[params.tmplId] ? params.tmplId : 'TMPL-BASEPLATE';
   const d = partLibrary[tmplId];
 
+  // Find the enquiry/order this part belongs to, so Back goes back to the record that links to
+  // it rather than just the browser's previous page.
+  const owner = rows.find(r => r.parts.some(p => p.tmpl === tmplId));
+  const backTo = owner ? (owner.isOrder ? `/proto/orders/${owner.orderId}` : `/proto/enquiries/${owner.id}`) : null;
+  const backLabel = owner ? `Back to ${owner.isOrder ? owner.orderId : owner.id}` : 'Back';
+
   return (
     <div>
+      <button type="button" className="back-link" onClick={() => (backTo ? navigate(backTo) : navigate(-1))}>
+        <Icon name="back" /> {backLabel}
+      </button>
       <div className="page-head">
         <div><h1>{d.name}</h1><div className="page-sub">{tmplId} · rev {d.rev} · {d.customer}</div></div>
         <div className="head-actions">
           <select aria-label="Part" value={tmplId} onChange={e => { setTab('overview'); navigate(`/proto/parts/${e.target.value}`); }}>
             {Object.entries(partLibrary).map(([id, p]) => <option key={id} value={id}>{p.name} — {p.customer}</option>)}
           </select>
-          <button type="button" className="btn btn-ghost">Request changes</button>
-          <button type="button" className="btn px-btn-primary">Approve plan</button>
         </div>
       </div>
       {d.note && <div className="stub-note"><Icon name="info" /><div>{d.note}</div></div>}
