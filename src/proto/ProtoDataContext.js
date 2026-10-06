@@ -13,7 +13,7 @@ const K = {
   artifactState: 'artifactState', clientReleased: 'clientReleased', sampleDataOn: 'sampleDataOn',
   userMaterials: 'userMaterials', userFinishes: 'userFinishes', rowOverrides: 'rowOverrides',
   partStatusOverrides: 'partStatusOverrides', customerOverrides: 'customerOverrides', deletedCustomers: 'deletedCustomers',
-  autoQuoteState: 'autoQuoteState',
+  autoQuoteState: 'autoQuoteState', partLibraryOverrides: 'partLibraryOverrides',
 };
 
 export function ProtoDataProvider({ children }) {
@@ -41,6 +41,9 @@ export function ProtoDataProvider({ children }) {
   // enquiry_parts.auto_quote_data / auto_quote_status, so this maps onto the real schema later
   // instead of its own invented one.
   const [autoQuoteState, setAutoQuoteState] = useState({});
+  // Patches onto a Part Workspace entry by tmpl id — mirrors rowOverrides so a sample part's
+  // workspace view (drawing/finish) can be revised too, same as a row.
+  const [partLibraryOverrides, setPartLibraryOverrides] = useState({});
   const [loaded, setLoaded] = useState(false);
   const seq = useRef(0);
 
@@ -59,6 +62,7 @@ export function ProtoDataProvider({ children }) {
       setCustomerOverrides(await kvGet(K.customerOverrides, {}));
       setDeletedCustomers(await kvGet(K.deletedCustomers, []));
       setAutoQuoteState(await kvGet(K.autoQuoteState, {}));
+      setPartLibraryOverrides(await kvGet(K.partLibraryOverrides, {}));
       setLoaded(true);
     })();
   }, []);
@@ -137,6 +141,48 @@ export function ProtoDataProvider({ children }) {
       return next;
     });
   }, []);
+
+  const patchPartLibrary = useCallback((tmpl, patch) => {
+    setPartLibraryOverrides(prev => {
+      const next = { ...prev, [tmpl]: { ...(prev[tmpl] || {}), ...patch } };
+      kvSet(K.partLibraryOverrides, next);
+      return next;
+    });
+  }, []);
+
+  // A client sending a revised drawing, or a finish/remarks change, after the enquiry was created.
+  // The earlier drawing and values are kept as a revision entry on the part — never overwritten —
+  // so the full history of what was received stays visible; only the "current" fields (read by
+  // Documents received, Part Workspace, CAM, etc.) move to the new values. Takes the current `row`
+  // object (as returned by `rows`/`findRow`) rather than looking it up itself.
+  const updatePartRevision = useCallback(async (row, partIndex, { drawingFile, finish, remarks, note }) => {
+    const part = row.parts[partIndex];
+    const at = new Date().toISOString();
+
+    let drawingFileKey = part.drawingFileKey;
+    let drawingFileName = part.drawingFileName;
+    if (drawingFile) {
+      drawingFileKey = `${row.id}:drawing:${partIndex}:${Date.now().toString(36)}`;
+      drawingFileName = drawingFile.name;
+      await fileSave(drawingFileKey, drawingFile);
+    }
+    const newFinish = finish || part.finish;
+    const remarksChanged = remarks !== undefined && remarks !== row.remarks;
+
+    // Snapshot of what's being superseded, not what's new — so the revision list reads as a log of
+    // what the part used to be.
+    const revision = {
+      at, note: note || '',
+      drawingFileKey: part.drawingFileKey, drawingFileName: part.drawingFileName,
+      finish: part.finish, remarks: row.remarks,
+    };
+    const newParts = row.parts.map((p, i) => (i === partIndex
+      ? { ...p, drawingFileKey, drawingFileName, finish: newFinish, revisions: [...(p.revisions || []), revision] }
+      : p));
+
+    patchRow(row.id, { parts: newParts, ...(remarksChanged ? { remarks } : {}) });
+    patchPartLibrary(part.tmpl, { drawingFileKey, drawingFileName, finish: newFinish });
+  }, [patchRow, patchPartLibrary]);
 
   // Turns any enquiry row into an order — generates an order id and switches it over, same as a
   // real "Convert to order" would. Works on a sample row too, so the flow can be tried end to end.
@@ -272,7 +318,10 @@ export function ProtoDataProvider({ children }) {
   const customers = (sampleDataOn ? [...userCustomers, ...INITIAL_CUSTOMERS] : [...userCustomers])
     .filter(c => !deletedCustomers.includes(c.name))
     .map(c => (customerOverrides[c.name] ? { ...c, ...customerOverrides[c.name] } : c));
-  const partLibrary = { ...(sampleDataOn ? PART_LIBRARY : {}), ...userPartLibrary };
+  const partLibraryBase = { ...(sampleDataOn ? PART_LIBRARY : {}), ...userPartLibrary };
+  const partLibrary = Object.fromEntries(Object.entries(partLibraryBase).map(([tmpl, p]) => [
+    tmpl, partLibraryOverrides[tmpl] ? { ...p, ...partLibraryOverrides[tmpl] } : p,
+  ]));
 
   const materials = [...MATERIAL_OPTIONS, ...userMaterials];
   const finishes = [...FINISH_OPTIONS, ...userFinishes];
@@ -283,6 +332,7 @@ export function ProtoDataProvider({ children }) {
     findRow: (id) => rows.find(r => r.id === id),
     findOrder: (orderId) => rows.find(r => r.orderId === orderId),
     addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote, setPartStatus,
+    updatePartRevision,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,

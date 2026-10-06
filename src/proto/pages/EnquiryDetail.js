@@ -5,6 +5,8 @@ import { StatusBadge } from '../components/Badges';
 import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
 import AutoQuoteModal from '../components/AutoQuoteModal';
+import UpdatePartModal from '../components/UpdatePartModal';
+import RevisionHistory from '../components/RevisionHistory';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
@@ -57,6 +59,7 @@ export default function EnquiryDetail() {
   const { findRow, openFile, downloadFile, convertToOrder, markNoOrderJob, uploadManualQuote } = useProtoData();
   const r = findRow(id);
   const [quotingPart, setQuotingPart] = useState(null); // part index, or null
+  const [updatingPart, setUpdatingPart] = useState(null); // part index, or null
   const manualQuoteInput = useRef(null);
 
   // Once converted this id belongs under /orders/:orderId — if something still links to the old
@@ -112,7 +115,7 @@ export default function EnquiryDetail() {
                   <span className="name">{p.name}</span>
                   <div style={{ display: 'flex', gap: 14 }}>
                     <button type="button" className="btn-text" onClick={() => setQuotingPart(i)}><Icon name="quote" size={14} /> Auto-quote</button>
-                    <button type="button" className="btn-text" onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>Part workspace <Icon name="cad" size={14} /></button>
+                    <button type="button" className="btn-text" onClick={() => setUpdatingPart(i)}><Icon name="upload" size={14} /> Update</button>
                   </div>
                 </div>
                 <div className="mini-grid">
@@ -152,6 +155,7 @@ export default function EnquiryDetail() {
                     <button type="button" className="btn-text" disabled={!p.drawingFileKey} onClick={() => downloadFile(p.drawingFileKey)}>Download</button>
                   </div>
                 </div>
+                <RevisionHistory part={p} />
               </React.Fragment>
             ))}
             {r.manualQuoteFileKey && (
@@ -178,6 +182,7 @@ export default function EnquiryDetail() {
         </div>
       </div>
       {quotingPart !== null && <AutoQuoteModal row={r} partIndex={quotingPart} onClose={() => setQuotingPart(null)} />}
+      {updatingPart !== null && <UpdatePartModal row={r} partIndex={updatingPart} onClose={() => setUpdatingPart(null)} />}
     </div>
   );
 }
