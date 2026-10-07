@@ -13,7 +13,7 @@ import { fmtDate } from '../utils';
 function TrialJobDetail({ r }) {
   const navigate = useNavigate();
   const { convertToOrder } = useProtoData();
-  const linkToOrder = () => navigate(`/proto/orders/${convertToOrder(r.id)}`);
+  const linkToOrder = () => navigate(`/proto/orders/${convertToOrder(r.id, 'QUOTED')}`);
   return (
     <div>
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
@@ -72,7 +72,7 @@ export default function EnquiryDetail() {
   if (r.isOrder) return null;
   if (r.jobType === 'TRIAL') return <TrialJobDetail r={r} />;
 
-  const convert = () => navigate(`/proto/orders/${convertToOrder(r.id)}`);
+  const convert = () => navigate(`/proto/orders/${convertToOrder(r.id, r.status)}`);
   const onManualQuoteChosen = (e) => {
     const file = e.target.files[0];
     e.target.value = '';

@@ -235,13 +235,28 @@ export function ProtoDataProvider({ children }) {
 
   // Turns any enquiry row into an order — generates an order id and switches it over, same as a
   // real "Convert to order" would. Works on a sample row too, so the flow can be tried end to end.
-  const convertToOrder = useCallback((id) => {
-    const orderId = nextId('ORD-USER');
+  const convertToOrder = useCallback((id, statusNow) => {
+    // Re-converting after a revert reuses the earlier order id, so whatever was uploaded against
+    // that order (PO, CAM program, certificates) is attached again instead of orphaned.
+    const prior = rowOverrides[id] || {};
+    const orderId = prior.lastOrderId || nextId('ORD-USER');
     const today = new Date().toISOString().slice(0, 10);
     const deadline = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
-    patchRow(id, { isOrder: true, orderId, orderDate: today, deadline, status: 'IN_PRODUCTION', jobType: undefined });
+    patchRow(id, {
+      isOrder: true, orderId, orderDate: today, deadline, status: 'IN_PRODUCTION', jobType: undefined,
+      statusBeforeOrder: statusNow || prior.statusBeforeOrder || 'QUOTED',
+    });
     return orderId;
-  }, [nextId, patchRow]);
+  }, [nextId, patchRow, rowOverrides]);
+
+  // Undo for Convert to order: the record goes back to being an enquiry with the quote status it
+  // had before. Nothing uploaded is deleted — the order id is remembered for a later re-convert.
+  const revertToEnquiry = useCallback((row) => {
+    patchRow(row.id, {
+      isOrder: false, orderId: undefined, orderDate: undefined, deadline: undefined,
+      lastOrderId: row.orderId, status: row.statusBeforeOrder || 'QUOTED',
+    });
+  }, [patchRow]);
 
   // "We're manufacturing this without a confirmed order" — moved here from enquiry creation, so it
   // is a decision you make about an enquiry that already exists, not a checkbox up front. Order?
@@ -380,7 +395,7 @@ export function ProtoDataProvider({ children }) {
     materials, finishes, addMaterial, addFinish,
     findRow: (id) => rows.find(r => r.id === id),
     findOrder: (orderId) => rows.find(r => r.orderId === orderId),
-    addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, markNoOrderJob, updateQuote, setPartStatus,
+    addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, updateQuote, setPartStatus,
     applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,

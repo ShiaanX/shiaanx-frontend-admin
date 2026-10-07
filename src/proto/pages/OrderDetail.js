@@ -13,9 +13,14 @@ const STAGE_LABEL = { PLANNED: 'Plan approved', SCHEDULED: 'Scheduled', MACHININ
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const { findOrder } = useProtoData();
+  const { findOrder, revertToEnquiry } = useProtoData();
   const r = findOrder(orderId);
   if (!r) return <div className="empty-hint">Order not found.</div>;
+  const revert = () => {
+    if (!window.confirm(`Turn ${r.orderId} back into enquiry ${r.id}? Nothing uploaded is deleted, and converting again later brings this order back.`)) return;
+    revertToEnquiry(r);
+    navigate(`/proto/enquiries/${r.id}`);
+  };
   // Same statuses as the Production Board; an order sits at the stage of its least-advanced piece.
   const stage = Math.min(...r.parts.map(p => JOB_STATUSES.indexOf(p.jobStatus)));
 
@@ -24,7 +29,10 @@ export default function OrderDetail() {
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
       <div className="detail-head">
         <div className="detail-title"><h1>{r.orderId}</h1><StatusBadge status={r.status} /></div>
-        <div className="head-actions"><button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button></div>
+        <div className="head-actions">
+          <button type="button" className="btn btn-ghost" onClick={revert}><Icon name="back" size={14} /> Revert to enquiry</button>
+          <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
+        </div>
       </div>
       <div className="grid2">
         <div>
