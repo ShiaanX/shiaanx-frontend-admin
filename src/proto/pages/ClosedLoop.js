@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import KpiStrip from '../components/KpiStrip';
@@ -166,8 +166,41 @@ function Catches({ cl }) {
   ));
 }
 
-// Built from the closed-loop repo's real report data. Tabs a part has no data for are disabled.
+// The real report from the closed-loop repo (krishna_report.html), shown as built — hover
+// explanations, charts, detail tables and all. It is copied into public/ by
+// `npm run sync:closed-loop` and is not part of the repo or of anything published, because it
+// carries real client data.
+const REPORT_URL = `${process.env.PUBLIC_URL || ''}/closed-loop-report/index.html`;
+
 export default function ClosedLoop() {
+  const [real, setReal] = useState(null); // null checking, true present, false absent
+  useEffect(() => {
+    let dead = false;
+    fetch(REPORT_URL, { method: 'HEAD' })
+      .then(r => { if (!dead) setReal(r.ok && (r.headers.get('content-type') || '').includes('html')); })
+      .catch(() => { if (!dead) setReal(false); });
+    return () => { dead = true; };
+  }, []);
+
+  if (real === null) return null;
+  if (real) {
+    return (
+      <div>
+        <div className="page-head">
+          <div><h1>Closed Loop</h1><div className="page-sub">The closed-loop report as generated from the machine telemetry, CAM plan and QC.</div></div>
+          <div className="head-actions"><a className="btn btn-ghost" href={REPORT_URL} target="_blank" rel="noreferrer">Open in a new tab</a></div>
+        </div>
+        <iframe title="Closed-loop report" src={REPORT_URL} data-cl-report
+          style={{ width: '100%', height: 'calc(100vh - 190px)', minHeight: 620, border: '1px solid var(--border)', borderRadius: 14, background: '#fff' }} />
+      </div>
+    );
+  }
+  return <ClosedLoopSummary />;
+}
+
+// Fallback when the real report has not been synced in (for example on the published preview): a
+// simplified, anonymised summary of the same data. Tabs a part has no data for are disabled.
+function ClosedLoopSummary() {
   const params = useParams();
   const navigate = useNavigate();
   const [tab, setTab] = useState('summary');
@@ -188,7 +221,7 @@ export default function ClosedLoop() {
   return (
     <div>
       <div className="page-head">
-        <div><h1>Closed Loop</h1><div className="page-sub">Real telemetry joined against the CAM plan and QC — from the closed-loop repo.</div></div>
+        <div><h1>Closed Loop</h1><div className="page-sub">A simplified summary of the closed-loop data. The full report, with its hover explanations and detail, shows here once it is synced in on this computer.</div></div>
         <div className="head-actions">
           <select aria-label="Part" value={partId} onChange={e => { setTab('summary'); navigate(`/proto/closed-loop/${e.target.value}`); }}>
             {Object.entries(CL_PARTS).map(([id, p]) => <option key={id} value={id}>{p.name} ({id})</option>)}

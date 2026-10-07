@@ -27,3 +27,6 @@ Thumbs.db
 # Firebase
 .firebase/
 firebase-debug.log
+
+# Real closed-loop report copied in by `npm run sync:closed-loop` — real client data, never commit
+public/closed-loop-report/

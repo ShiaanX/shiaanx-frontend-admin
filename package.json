@@ -23,7 +23,8 @@
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
-    "deploy:preview": "node scripts/deploy-preview.js"
+    "deploy:preview": "node scripts/deploy-preview.js",
+    "sync:closed-loop": "node scripts/sync-closed-loop-report.js"
   },
   "eslintConfig": {
     "extends": [

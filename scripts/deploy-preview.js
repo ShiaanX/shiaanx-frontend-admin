@@ -21,6 +21,14 @@ if (buildOnly) {
   process.exit(0);
 }
 
+// The locally synced closed-loop report holds real client data; it must never reach the public site.
+const fs = require('fs');
+const privateReport = path.join(root, 'build', 'closed-loop-report');
+if (fs.existsSync(privateReport)) {
+  fs.rmSync(privateReport, { recursive: true, force: true });
+  console.log('Left out of the published build: closed-loop-report (real client data).');
+}
+
 require('gh-pages').publish(
   path.join(root, 'build'),
   { branch: 'gh-pages', nojekyll: true, message: 'Deploy admin-flow preview' },
