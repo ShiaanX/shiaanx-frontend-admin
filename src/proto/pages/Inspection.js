@@ -11,6 +11,8 @@ import { fileGet } from '../db';
 // computer. It maps each ballooned drawing dimension to the CAD faces it measures and colours the
 // result, so the report can be read without knowing the drawing.
 const QC_VIEW_URL = 'http://localhost:8780';
+// Added to the embedded page's address so a copy cached before an update is never reused.
+const PAGE_LOAD = Date.now();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const isXlsx = (name) => /\.xlsx$/i.test(name || '');
 
@@ -167,7 +169,7 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
           </p>
         )}
         {mode === 'result' && info.tagged === 0 && <p className="page-sub" style={{ margin: '0 0 10px' }}>Nothing is tagged yet, so there is nothing to show on the model. Use Tag dimensions first.</p>}
-        <iframe key={`${mode}-${frameKey}`} title="3D QC view" src={`${QC_VIEW_URL}/${mode === 'tag' ? 'dimensions' : 'inspection'}?job=${linkedJob}&embed=1`}
+        <iframe key={`${mode}-${frameKey}`} title="3D QC view" src={`${QC_VIEW_URL}/${mode === 'tag' ? 'dimensions' : 'inspection'}?job=${linkedJob}&embed=1&v=${PAGE_LOAD}`}
           style={{ width: '100%', height: 760, border: '1px solid var(--border)', borderRadius: 10 }} />
       </>
     );

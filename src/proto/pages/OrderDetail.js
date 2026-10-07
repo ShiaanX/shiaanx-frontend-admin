@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { StatusBadge } from '../components/Badges';
 import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
+import DocumentsReceived from '../components/DocumentsReceived';
+import UpdateEnquiryModal from '../components/UpdateEnquiryModal';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
@@ -14,6 +16,7 @@ export default function OrderDetail() {
   const navigate = useNavigate();
   const { findOrder, revertToEnquiry } = useProtoData();
   const r = findOrder(orderId);
+  const [showUpdate, setShowUpdate] = useState(false);
   if (!r) return <div className="empty-hint">Order not found.</div>;
   const revert = () => {
     if (!window.confirm(`Turn ${r.orderId} back into enquiry ${r.id}? Nothing uploaded is deleted, and converting again later brings this order back.`)) return;
@@ -29,6 +32,7 @@ export default function OrderDetail() {
       <div className="detail-head">
         <div className="detail-title"><h1>{r.orderId}</h1><StatusBadge status={r.status} /></div>
         <div className="head-actions">
+          <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost" onClick={revert}><Icon name="back" size={14} /> Revert to enquiry</button>
           <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
         </div>
@@ -52,6 +56,7 @@ export default function OrderDetail() {
           <ArtifactChecklist jobId={r.orderId} row={r} hasOrder />
         </div>
         <div>
+          <DocumentsReceived row={r} />
           <div className="card">
             <h2>Status history</h2>
             <div className="timeline">
@@ -67,6 +72,7 @@ export default function OrderDetail() {
           </div>
         </div>
       </div>
+      {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
     </div>
   );
 }

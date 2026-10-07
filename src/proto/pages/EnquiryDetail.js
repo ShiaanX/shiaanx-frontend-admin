@@ -6,7 +6,7 @@ import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
 import AutoQuoteModal from '../components/AutoQuoteModal';
 import UpdateEnquiryModal from '../components/UpdateEnquiryModal';
-import RevisionHistory from '../components/RevisionHistory';
+import DocumentsReceived from '../components/DocumentsReceived';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
@@ -14,12 +14,14 @@ function TrialJobDetail({ r }) {
   const navigate = useNavigate();
   const { convertToOrder } = useProtoData();
   const linkToOrder = () => navigate(`/proto/orders/${convertToOrder(r.id, 'QUOTED')}`);
+  const [showUpdate, setShowUpdate] = useState(false);
   return (
     <div>
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
       <div className="detail-head">
         <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /><span className="badge b-neutral">NO CUSTOMER ORDER</span></div>
         <div className="head-actions">
+          <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
           <button type="button" className="btn px-btn-primary" onClick={linkToOrder}>Link to a customer order</button>
         </div>
@@ -38,6 +40,7 @@ function TrialJobDetail({ r }) {
           <ArtifactChecklist jobId={r.id} row={r} hasOrder={false} />
         </div>
         <div>
+          <DocumentsReceived row={r} />
           <div className="card">
             <h2>Status history</h2>
             <div className="timeline">
@@ -49,6 +52,7 @@ function TrialJobDetail({ r }) {
           </div>
         </div>
       </div>
+      {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
     </div>
   );
 }
@@ -56,7 +60,7 @@ function TrialJobDetail({ r }) {
 export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { findRow, openFile, downloadFile, convertToOrder, markNoOrderJob, uploadManualQuote } = useProtoData();
+  const { findRow, convertToOrder, markNoOrderJob, uploadManualQuote } = useProtoData();
   const r = findRow(id);
   const [quotingPart, setQuotingPart] = useState(null); // part index, or null
   const [showUpdate, setShowUpdate] = useState(false);
@@ -131,49 +135,7 @@ export default function EnquiryDetail() {
           </div>
         </div>
         <div>
-          <div className="card">
-            <h2><Icon name="doc" /> Documents received</h2>
-            {r.parts.map(p => (
-              <React.Fragment key={p.tmpl || p.name}>
-                <div className="doc-row">
-                  <div className="doc-icon"><Icon name="cad" /></div>
-                  <div>
-                    <div className="doc-name">{p.fileKey ? p.file : 'STEP file'}</div>
-                    <div className="doc-sub">{p.fileKey ? `3D model (CAD) · ${p.name}` : '99.7 KB · uploaded by customer'}</div>
-                  </div>
-                  <div className="doc-actions">
-                    <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>View 3D</button>
-                    <button type="button" className="btn-text" disabled={!p.fileKey} onClick={() => downloadFile(p.fileKey)}>Download</button>
-                  </div>
-                </div>
-                <div className="doc-row">
-                  <div className="doc-icon"><Icon name="doc" /></div>
-                  <div>
-                    <div className="doc-name">{p.drawingFileKey ? p.drawingFileName : 'Ballooned drawing.pdf'}</div>
-                    <div className="doc-sub">{p.drawingFileKey ? `2D drawing (PDF) · ${p.name}` : '1 page'}</div>
-                  </div>
-                  <div className="doc-actions">
-                    <button type="button" className="btn-text" disabled={!p.drawingFileKey} onClick={() => openFile(p.drawingFileKey)}>View</button>
-                    <button type="button" className="btn-text" disabled={!p.drawingFileKey} onClick={() => downloadFile(p.drawingFileKey)}>Download</button>
-                  </div>
-                </div>
-                <RevisionHistory part={p} />
-              </React.Fragment>
-            ))}
-            {r.manualQuoteFileKey && (
-              <div className="doc-row">
-                <div className="doc-icon"><Icon name="doc" /></div>
-                <div>
-                  <div className="doc-name">{r.manualQuoteFileName}</div>
-                  <div className="doc-sub">Manual quote</div>
-                </div>
-                <div className="doc-actions">
-                  <button type="button" className="btn-text" onClick={() => openFile(r.manualQuoteFileKey)}>View</button>
-                  <button type="button" className="btn-text" onClick={() => downloadFile(r.manualQuoteFileKey)}>Download</button>
-                </div>
-              </div>
-            )}
-          </div>
+          <DocumentsReceived row={r} />
           <div className="card">
             <h2>Status history</h2>
             <div className="timeline">

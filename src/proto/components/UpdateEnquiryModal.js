@@ -56,7 +56,7 @@ export default function UpdateEnquiryModal({ row, onClose }) {
 
   return (
     <Modal
-      title={`Update ${row.id}`}
+      title={`Update ${row.isOrder ? row.orderId : row.id}`}
       maxWidth={640}
       onClose={onClose}
       footer={<>

@@ -76,7 +76,19 @@ export function ProtoDataProvider({ children }) {
 
   useEffect(() => {
     (async () => {
-      setUserRows(await kvGet(K.userRows, []));
+      // Enquiries created when the drawing was kept once per enquiry: move it onto the first part,
+      // under the name it was uploaded with, so it shows (and opens) like any other part drawing.
+      const storedRows = await kvGet(K.userRows, []);
+      let migrated = false;
+      for (const r of storedRows) {
+        if (r.drawingFileKey && r.parts[0] && !r.parts[0].drawingFileKey) {
+          const entry = await fileGet(r.drawingFileKey);
+          r.parts[0] = { ...r.parts[0], drawingFileKey: r.drawingFileKey, drawingFileName: r.drawingFileName || (entry && entry.name) || 'Drawing.pdf' };
+          migrated = true;
+        }
+      }
+      if (migrated) kvSet(K.userRows, storedRows);
+      setUserRows(storedRows);
       setUserCustomers(await kvGet(K.userCustomers, []));
       setUserPartLibrary(await kvGet(K.userPartLibrary, {}));
       setArtifactState(await kvGet(K.artifactState, INITIAL_ARTIFACT_STATE));
