@@ -107,7 +107,8 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
   const refreshReadings = async () => {
     setError('');
     try {
-      await sendSheet(linkedJob, false);
+      await sendSheet(linkedJob, info && info.total === 0);
+      await loadInfo(linkedJob, true);
       setBusy('');
       setFrameKey(k => k + 1);
     } catch (e) { setBusy(''); setError(e.message || String(e)); }
@@ -156,17 +157,17 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
             {balloonKey && <button type="button" className="btn-text" onClick={() => openFile(balloonKey)}>Open ballooned drawing</button>}
-            {report && isXlsx(report.name) && <button type="button" className="btn-text" disabled={!!busy} onClick={refreshReadings}>{busy || 'Send latest QC sheet'}</button>}
+            {report && isXlsx(report.name) && <button type="button" className="btn-text" disabled={!!busy} onClick={refreshReadings}>{busy || 'Re-read the uploaded QC sheet'}</button>}
           </div>
         </div>
         {mode === 'tag' && (
           <p className="page-sub" style={{ margin: '0 0 10px' }}>
-            {info.total === 0 ? 'No balloons listed yet — import the QC sheet below, or add dimensions by hand. ' : ''}
+            {info.total === 0 ? 'No balloons listed yet — upload the QC sheet (.xlsx) on the Inspection report line of the job, or use Add dimension. ' : ''}
             For each balloon, click the face or faces it measures on the model, then Save. Switch to Result when you are done.
           </p>
         )}
         {mode === 'result' && info.tagged === 0 && <p className="page-sub" style={{ margin: '0 0 10px' }}>Nothing is tagged yet, so there is nothing to show on the model. Use Tag dimensions first.</p>}
-        <iframe key={`${mode}-${frameKey}`} title="3D QC view" src={`${QC_VIEW_URL}/${mode === 'tag' ? 'dimensions' : 'inspection'}?job=${linkedJob}`}
+        <iframe key={`${mode}-${frameKey}`} title="3D QC view" src={`${QC_VIEW_URL}/${mode === 'tag' ? 'dimensions' : 'inspection'}?job=${linkedJob}&embed=1`}
           style={{ width: '100%', height: 760, border: '1px solid var(--border)', borderRadius: 10 }} />
       </>
     );
@@ -202,6 +203,7 @@ export default function Inspection() {
   const recorded = INSPECTION_BY_PART[part];
   const dims = recorded ? recorded.dims : (tmpl && partLibrary[tmpl] && partLibrary[tmpl].dims) || null;
   const s = recorded && recorded.summary;
+  const linkedQc = tmpl ? (partLibrary[tmpl] || {}).qcJobId || null : null;
 
   return (
     <div>
@@ -216,11 +218,11 @@ export default function Inspection() {
         </div>
       </div>
       {tmpl && (
-        <QcView3D part={owner.parts[partIndex]} linkedJob={(partLibrary[tmpl] || {}).qcJobId || null}
+        <QcView3D part={owner.parts[partIndex]} linkedJob={linkedQc}
           reportKey={reportKey} balloonKey={balloonKey} openFile={openFile}
           onLink={(jobId) => patchPartLibrary(tmpl, { qcJobId: jobId })} />
       )}
-      <div className="card">
+      {!linkedQc && <div className="card">
         <h2><Icon name="box" /> Dimensions</h2>
         {s && (
           <KpiStrip style={{ marginBottom: 16 }} items={[
@@ -248,7 +250,7 @@ export default function Inspection() {
             No dimension results are recorded for this part yet. {reportKey ? 'The uploaded report opens from the button above; its readings are not read into this view yet.' : 'Upload the inspection report on the job first.'}
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
