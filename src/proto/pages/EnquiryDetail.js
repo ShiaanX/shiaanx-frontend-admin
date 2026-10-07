@@ -35,7 +35,7 @@ function TrialJobDetail({ r }) {
             <dl className="kv"><dt>Customer</dt><dd>{r.customer}</dd><dt>Started</dt><dd>{fmtDate(r.date)}</dd><dt>Parts</dt><dd>{r.parts.length}</dd></dl>
           </div>
           <ClosedLoopCard parts={r.parts} />
-          <ArtifactChecklist jobId={r.id} hasOrder={false} />
+          <ArtifactChecklist jobId={r.id} row={r} hasOrder={false} />
         </div>
         <div>
           <div className="card">

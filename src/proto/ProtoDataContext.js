@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { ROWS, INITIAL_CUSTOMERS, INITIAL_ARTIFACT_STATE, PART_LIBRARY, MATERIAL_OPTIONS, FINISH_OPTIONS } from './fixtures';
-import { kvGet, kvSet, fileSave, fileOpen, fileDownload } from './db';
+import { kvGet, kvSet, fileSave, fileGet, fileOpen, fileDownload } from './db';
 
 // Everything you add in the preview — new enquiries, customers, uploads, checklist state — is kept
 // here and mirrored into IndexedDB (see db.js), so it survives a reload in THIS browser only.
@@ -13,8 +13,22 @@ const K = {
   artifactState: 'artifactState', clientReleased: 'clientReleased', sampleDataOn: 'sampleDataOn',
   userMaterials: 'userMaterials', userFinishes: 'userFinishes', rowOverrides: 'rowOverrides',
   partStatusOverrides: 'partStatusOverrides', customerOverrides: 'customerOverrides', deletedCustomers: 'deletedCustomers',
-  autoQuoteState: 'autoQuoteState', partLibraryOverrides: 'partLibraryOverrides',
+  autoQuoteState: 'autoQuoteState', partLibraryOverrides: 'partLibraryOverrides', cappUrl: 'cappUrl',
 };
+
+const DEFAULT_CAPP_URL = 'http://localhost:8001';
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// The CAPP pipeline only has cutting data for these; anything else is planned as aluminium and the
+// result says so.
+function pipelineMaterial(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('alumin')) return { key: 'aluminium', exact: true };
+  if (n.includes('titanium')) return { key: 'titanium', exact: true };
+  if (n.includes('brass')) return { key: 'brass', exact: true };
+  if (n.includes('steel')) return { key: 'steel', exact: true };
+  return { key: 'aluminium', exact: false };
+}
 
 export function ProtoDataProvider({ children }) {
   const [userRows, setUserRows] = useState([]);
@@ -44,6 +58,10 @@ export function ProtoDataProvider({ children }) {
   // Patches onto a Part Workspace entry by tmpl id — mirrors rowOverrides so a sample part's
   // workspace view (drawing/finish) can be revised too, same as a row.
   const [partLibraryOverrides, setPartLibraryOverrides] = useState({});
+  const [cappUrl, setCappUrlState] = useState(DEFAULT_CAPP_URL);
+  // Live status of a running Generate, keyed `${jobId}:${artifactId}` — {text} while running,
+  // {error} if it failed. Not persisted.
+  const [artifactProgress, setArtifactProgress] = useState({});
   const [loaded, setLoaded] = useState(false);
   const seq = useRef(0);
 
@@ -63,6 +81,7 @@ export function ProtoDataProvider({ children }) {
       setDeletedCustomers(await kvGet(K.deletedCustomers, []));
       setAutoQuoteState(await kvGet(K.autoQuoteState, {}));
       setPartLibraryOverrides(await kvGet(K.partLibraryOverrides, {}));
+      setCappUrlState(await kvGet(K.cappUrl, DEFAULT_CAPP_URL));
       setLoaded(true);
     })();
   }, []);
@@ -233,6 +252,99 @@ export function ProtoDataProvider({ children }) {
     }
   }, [nextId, patchRow, patchPartLibrary]);
 
+  const setCappUrl = useCallback((url) => {
+    const clean = (url || '').trim().replace(/\/+$/, '') || DEFAULT_CAPP_URL;
+    setCappUrlState(clean);
+    kvSet(K.cappUrl, clean);
+  }, []);
+
+  // Process plan: the one checklist item that is really generated. Each part's uploaded STEP file is
+  // sent to the CAPP service (capp_service in the shiaanx-CAPP repo — the 8-stage pipeline), and the
+  // program sheet PDF it returns is stored as the artifact. The setups / operations / envelope it
+  // works out also fill that part's Part Workspace overview. The service has to be running and
+  // reachable from this browser; if it isn't, this says so rather than faking a result.
+  const generateProcessPlan = useCallback(async (jobId, row) => {
+    const pKey = `${jobId}:plan`;
+    const say = (text) => setArtifactProgress(prev => ({ ...prev, [pKey]: { text } }));
+    const fail = (error) => setArtifactProgress(prev => ({ ...prev, [pKey]: { error } }));
+
+    const targets = row.parts.map((p, i) => ({ p, i })).filter(t => t.p.fileKey);
+    if (targets.length === 0) {
+      fail('No STEP file is attached to this job, and the process plan is worked out from the STEP file. Attach one to the part first.');
+      return;
+    }
+
+    const files = [];
+    const summaries = [];
+    const notes = [];
+    try {
+      for (const { p, i } of targets) {
+        const entry = await fileGet(p.fileKey);
+        if (!entry) throw new Error(`The STEP file for ${p.name} is no longer in this browser's storage.`);
+        const mat = pipelineMaterial(p.material);
+        if (!mat.exact) notes.push(`${p.name}: no cutting data for ${p.material}, planned as aluminium`);
+
+        say(`${p.name}: sending STEP file to the CAPP pipeline…`);
+        const body = new FormData();
+        body.append('step_file', entry.blob, entry.name || 'part.step');
+        body.append('part_name', p.name);
+        body.append('material', mat.key);
+        let res;
+        try {
+          res = await fetch(`${cappUrl}/jobs`, { method: 'POST', body });
+        } catch (e) {
+          throw new Error(`Could not reach the CAPP service at ${cappUrl}. It has to be running on this computer — see Settings → CAPP service for how to start it.`);
+        }
+        if (!res.ok) throw new Error(`CAPP service refused the file (${res.status}).`);
+        const { job_id: cappJob } = await res.json();
+
+        let status;
+        for (let n = 0; n < 240; n++) {
+          await sleep(1500);
+          status = await (await fetch(`${cappUrl}/jobs/${cappJob}`)).json();
+          if (status.status === 'COMPLETE' || status.status === 'FAILED') break;
+          say(`${p.name}: stage ${status.stage}/9 — ${status.stage_name}`);
+        }
+        if (!status || status.status !== 'COMPLETE') {
+          const why = status && status.error ? String(status.error).trim().split('\n').slice(-3).join(' ') : 'timed out';
+          throw new Error(`The pipeline failed on ${p.name}: ${why}`);
+        }
+
+        say(`${p.name}: fetching the program sheet…`);
+        const pdf = await (await fetch(`${cappUrl}/jobs/${cappJob}/pdf`)).blob();
+        const fileKey = `${jobId}:plan:${i}`;
+        await fileSave(fileKey, new File([pdf], `${p.name}_program_sheet.pdf`, { type: 'application/pdf' }));
+        files.push({ label: p.name, fileKey });
+
+        const out = await (await fetch(`${cappUrl}/jobs/${cappJob}/output/setups`)).json();
+        const setups = out.setups || [];
+        const ops = setups.reduce((sum, s) => sum + (s.operation_count || 0), 0);
+        const bb = out.bounding_box || {};
+        summaries.push({ setups: setups.length, ops });
+        patchPartLibrary(p.tmpl, {
+          setups: `${setups.length} — ${setups.map(s => s.wcs).join(', ')}`,
+          operations: `${ops}, across ${setups.length} setup${setups.length === 1 ? '' : 's'}`,
+          stock: bb.length_x ? `Part envelope ${bb.length_x} × ${bb.length_y} × ${bb.length_z} mm` : '—',
+          programSource: 'AI_GENERATED · CAPP pipeline', planStatus: 'DRAFT', cappJobId: cappJob,
+        });
+      }
+    } catch (e) {
+      fail(e.message || String(e));
+      return;
+    }
+
+    const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const totals = `${summaries.reduce((s, x) => s + x.setups, 0)} setup(s), ${summaries.reduce((s, x) => s + x.ops, 0)} operations`;
+    const skipped = row.parts.length - targets.length;
+    const note = [`CAPP pipeline · ${when} · ${totals}`, skipped ? `${skipped} part(s) skipped, no STEP file` : '', ...notes].filter(Boolean).join(' · ');
+    setArtifactState(prev => {
+      const next = { ...prev, [jobId]: { ...(prev[jobId] || {}), plan: { done: true, fileKey: files[0].fileKey, files, note } } };
+      kvSet(K.artifactState, next);
+      return next;
+    });
+    setArtifactProgress(prev => { const next = { ...prev }; delete next[pKey]; return next; });
+  }, [cappUrl, patchPartLibrary]);
+
   // Turns any enquiry row into an order — generates an order id and switches it over, same as a
   // real "Convert to order" would. Works on a sample row too, so the flow can be tried end to end.
   const convertToOrder = useCallback((id, statusNow) => {
@@ -398,6 +510,7 @@ export function ProtoDataProvider({ children }) {
     addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, updateQuote, setPartStatus,
     applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
+    cappUrl, setCappUrl, generateProcessPlan, artifactProgress,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,
   };

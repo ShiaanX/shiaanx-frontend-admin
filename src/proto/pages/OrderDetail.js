@@ -50,7 +50,7 @@ export default function OrderDetail() {
             </div>
           </div>
           <ClosedLoopCard parts={r.parts} />
-          <ArtifactChecklist jobId={r.orderId} hasOrder />
+          <ArtifactChecklist jobId={r.orderId} row={r} hasOrder />
         </div>
         <div>
           <div className="card">
