@@ -117,7 +117,10 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
               <button type="button" className="btn-sm ghost" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Replace' : 'Regenerate')}</button>
             </>
           ) : (
-            <button type="button" className="btn-sm primary" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Upload' : 'Generate')}</button>
+            <>
+              {viewTo && human && <button type="button" className="btn-sm text" onClick={() => navigate(viewTo)}>View</button>}
+              <button type="button" className="btn-sm primary" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Upload' : 'Generate')}</button>
+            </>
           )}
         </div>
       </div>

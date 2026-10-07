@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import KpiStrip from '../components/KpiStrip';
@@ -6,13 +6,70 @@ import { VerdictBadge } from '../components/Badges';
 import { INSPECTION_BY_PART } from '../fixtures';
 import { useProtoData } from '../ProtoDataContext';
 
+// Where the 3D QC view is served from: the labeling app in the shiaanx-CAPP repo, running on this
+// computer. It maps each ballooned drawing dimension to the CAD faces it measures and colours the
+// result, so the report can be read without knowing the drawing.
+const QC_VIEW_URL = 'http://localhost:8780';
+
+function QcView3D({ tmpl, linkedJob, onLink }) {
+  const [jobs, setJobs] = useState(null); // null = loading, false = not reachable, [] = none tagged
+  const [pick, setPick] = useState('');
+  useEffect(() => {
+    let dead = false;
+    fetch(`${QC_VIEW_URL}/api/dimension-jobs`).then(r => r.json())
+      .then(d => { if (!dead) setJobs(d.jobs || []); })
+      .catch(() => { if (!dead) setJobs(false); });
+    return () => { dead = true; };
+  }, []);
+
+  return (
+    <div className="card" data-qc3d>
+      <h2><Icon name="cad" /> 3D QC view</h2>
+      {jobs === null && <div className="empty-hint">Looking for the 3D QC view…</div>}
+      {jobs === false && (
+        <div className="empty-hint">
+          The 3D QC view is not running on this computer. It is the labeling app — start it with run.bat in the labeling_app folder, then reload this page.
+        </div>
+      )}
+      {jobs && linkedJob && (
+        <>
+          <div className="cell-sub" style={{ marginBottom: 10 }}>
+            Showing tagged part {(jobs.find(j => j.job_id === linkedJob) || {}).original_name || linkedJob}.{' '}
+            <button type="button" className="btn-text" onClick={() => onLink(null)}>Change</button>
+          </div>
+          <iframe title="3D QC view" src={`${QC_VIEW_URL}/inspection?job=${linkedJob}`}
+            style={{ width: '100%', height: 760, border: '1px solid var(--border)', borderRadius: 10 }} />
+        </>
+      )}
+      {jobs && !linkedJob && (jobs.length === 0 ? (
+        <div className="empty-hint">No part has its drawing dimensions tagged to the CAD yet. Tag one in the labeling app (Dimensions page) and it will be offered here.</div>
+      ) : (
+        <>
+          <p className="page-sub" style={{ margin: '0 0 12px' }}>
+            Pick the tagged part that corresponds to this one. Tagging is done once per part in the labeling app, with its ballooned drawing and QC sheet.
+          </p>
+          <div className="field">
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={pick} onChange={e => setPick(e.target.value)} aria-label="Tagged part">
+                <option value="">Select a tagged part…</option>
+                {jobs.map(j => <option key={j.job_id} value={j.job_id}>{j.original_name} — {j.tagged_count} of {j.dimension_count} dimensions tagged</option>)}
+              </select>
+              <button type="button" className="btn px-btn-primary" disabled={!pick} onClick={() => onLink(pick)}>Show</button>
+            </div>
+          </div>
+        </>
+      ))}
+    </div>
+  );
+}
+
 // The inspection report view for one part — where its dimensions (the quality data) are shown.
 // Opened from View on the part's Inspection report line. The uploaded report file itself opens
 // from here; dimension-by-dimension results show for parts that have them recorded.
 export default function Inspection() {
   const { part } = useParams();
   const navigate = useNavigate();
-  const { rows, partLibrary, artifactState, openFile } = useProtoData();
+  const { rows, partLibrary, artifactState, openFile, patchPartLibrary } = useProtoData();
   const back = <button type="button" className="back-link" onClick={() => navigate(-1)}><Icon name="back" /> Back</button>;
 
   const owner = rows.find(r => r.parts.some(p => p.name === part));
@@ -38,6 +95,10 @@ export default function Inspection() {
           </button>
         </div>
       </div>
+      {tmpl && (
+        <QcView3D tmpl={tmpl} linkedJob={(partLibrary[tmpl] || {}).qcJobId || null}
+          onLink={(jobId) => patchPartLibrary(tmpl, { qcJobId: jobId })} />
+      )}
       <div className="card">
         <h2><Icon name="box" /> Dimensions</h2>
         {s && (

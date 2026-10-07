@@ -33,11 +33,16 @@ export default function ClosedLoopCard({ parts }) {
                 <div className="kpi err"><div className="n">{p.inspection.fail}</div><div className="l">Out of tol.</div></div>
               </div>
               <button type="button" className="btn-text" style={{ marginTop: 10 }} onClick={() => navigate(`/proto/inspection/${encodeURIComponent(p.name)}`)}>
-                Open 3D inspection report →
+                Inspection report and 3D QC view →
               </button>
             </div>
           ) : (
-            <div className="empty-hint" style={{ padding: '10px 0 0', textAlign: 'left' }}>Not yet inspected.</div>
+            <div style={{ marginTop: 10 }}>
+              <span className="cell-sub">Not yet inspected. </span>
+              <button type="button" className="btn-text" onClick={() => navigate(`/proto/inspection/${encodeURIComponent(p.name)}`)}>
+                Inspection report and 3D QC view →
+              </button>
+            </div>
           )}
         </div>
       ))}

@@ -561,7 +561,7 @@ export function ProtoDataProvider({ children }) {
     addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, updateQuote, setPartStatus,
     applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
-    settingsTables, setSettingsTable,
+    settingsTables, setSettingsTable, patchPartLibrary,
     cappUrl, setCappUrl, generateProcessPlan, artifactProgress, addOtherDocument, removeOtherDocument,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,
