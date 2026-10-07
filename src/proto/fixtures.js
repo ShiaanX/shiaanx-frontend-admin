@@ -5,7 +5,13 @@
 export const TODAY = new Date('2026-10-05');
 
 // Shared by the Production Board columns and each order's status timeline.
-export const JOB_STATUSES = ['PLANNED', 'SCHEDULED', 'MACHINING', 'QC', 'DISPATCHED'];
+export const JOB_STATUSES = ['IN_QUEUE', 'PROCESS_PLANNING', 'SCHEDULING', 'PRODUCTION', 'QC', 'DISPATCHED'];
+export const JOB_STATUS_LABEL = {
+  IN_QUEUE: 'In queue', PROCESS_PLANNING: 'Process planning', SCHEDULING: 'Scheduling',
+  PRODUCTION: 'Production', QC: 'QC', DISPATCHED: 'Dispatched',
+};
+// Statuses saved in a browser before the board's stages were renamed.
+export const LEGACY_JOB_STATUS = { PLANNED: 'PROCESS_PLANNING', SCHEDULED: 'SCHEDULING', MACHINING: 'PRODUCTION' };
 
 export const INITIAL_CUSTOMERS = [
   { name: 'Client A', company: 'Client A Defence Systems', email: 'procurement@client-a.example', phone: '+91 98xxx xxxxx' },
@@ -27,14 +33,14 @@ export const ROWS = [
     orderDate: '2026-09-30', deadline: '2026-10-12', poValue: '₹ 84,500',
     remarks: 'Rush order — customer flagged this as blocking their own assembly line.', parts: [
       { tmpl: 'TMPL-BASEPLATE', name: 'Heat-Sink Base Plate', material: 'Copper', qty: 1, finish: 'Ni plate 10µm', file: 'base_plate.stp',
-        machine: 'STM-01', jobStatus: 'MACHINING', inspection: { pass: 16, near: 1, fail: 3, total: 19 } },
+        machine: 'STM-01', jobStatus: 'PRODUCTION', inspection: { pass: 16, near: 1, fail: 3, total: 19 } },
     ] },
   { id: 'ENQ-2026-0130', customer: 'Client B', date: '2026-09-20', status: 'IN_PRODUCTION', isOrder: true, orderId: 'ORD-2026-0084',
     orderDate: '2026-09-22', deadline: '2026-10-08', parts: [
       { tmpl: 'TMPL-HUB', name: 'Hub', material: 'Aluminium 6061', qty: 2, finish: 'As machined', file: 'hub.stp',
         machine: 'VMC-02', jobStatus: 'QC', inspection: null },
       { tmpl: 'TMPL-HINGE', name: 'Hinge', material: 'Aluminium 6061', qty: 2, finish: 'As machined', file: 'hinge.stp',
-        machine: 'VMC-01', jobStatus: 'PLANNED', inspection: null },
+        machine: 'VMC-01', jobStatus: 'PROCESS_PLANNING', inspection: null },
     ] },
   { id: 'ENQ-2026-0125', customer: 'Client C', date: '2026-09-10', status: 'DISPATCHED', isOrder: true, orderId: 'ORD-2026-0077',
     orderDate: '2026-09-12', deadline: '2026-09-29', parts: [
@@ -52,7 +58,7 @@ export const ROWS = [
 ];
 
 export const PARTNER_JOBS = [
-  { n: 'Camera Housing #1', m: 'Client F', tag: 'partner', tl: 'Partner shop 1', status: 'SCHEDULED' },
+  { n: 'Camera Housing #1', m: 'Client F', tag: 'partner', tl: 'Partner shop 1', status: 'SCHEDULING' },
 ];
 
 // src decides the action verb: ai/tech → Generate, human → Upload.

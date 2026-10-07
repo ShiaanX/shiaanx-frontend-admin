@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
@@ -50,6 +51,7 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
     artifactState, artifactProgress, markArtifactDone, generateProcessPlan, addOtherDocument, removeOtherDocument,
     openFile, downloadFile, getClientReleased, toggleClientRelease,
   } = useProtoData();
+  const navigate = useNavigate();
   const released = getClientReleased(jobId);
   const state = artifactState[jobId] || {};
   const fileInputRef = useRef(null);
@@ -78,7 +80,9 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
     return partIndex === 0 ? old : undefined;
   };
 
-  const Slot = ({ name, slotKey, slot, partIndex, sub }) => {
+  // viewTo: where View goes instead of opening the stored file — the CAM program view for the AI
+  // CAM line, the inspection report view for the inspection report.
+  const Slot = ({ name, slotKey, slot, partIndex, sub, viewTo }) => {
     const entry = slot.legacy !== undefined || partIndex !== undefined ? lookup(slotKey, slot.legacy, partIndex) : state[slotKey];
     const done = entry === true || !!(entry && entry.done);
     const progress = artifactProgress[`${jobId}:${slotKey}`];
@@ -109,7 +113,7 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
             <>
               <span className="toggle-label">Client</span>
               <button type="button" className={`toggle ${released[slotKey] ? 'on' : ''}`} onClick={() => toggleClientRelease(jobId, slotKey)} aria-label="Release to client" />
-              <button type="button" className="btn-sm text" disabled={!fileKey} onClick={() => openFile(fileKey)}>View</button>
+              <button type="button" className="btn-sm text" disabled={!viewTo && !fileKey} onClick={() => (viewTo ? navigate(viewTo) : openFile(fileKey))}>View</button>
               <button type="button" className="btn-sm ghost" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Replace' : 'Regenerate')}</button>
             </>
           ) : (
@@ -184,7 +188,8 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
           <div className="doc-part-head"><Icon name="part" size={15} /> {p.name} <span className="cell-sub">· part {i + 1} of {parts.length}</span></div>
           {PART_DOCS.map(d => d.slots.map((slot, si) => (
             <Slot key={`${d.id}.${slot.src}`} name={d.name} slotKey={slot.key ? `p${i}.${slot.key}` : (d.slots.length > 1 ? `p${i}.${d.id}.${slot.src}` : `p${i}.${d.id}`)}
-              slot={slot} partIndex={i} sub={si > 0} />
+              slot={slot} partIndex={i} sub={si > 0}
+              viewTo={slot.key === 'plan' ? `/proto/parts/${p.tmpl}` : (d.id === 'inspReport' ? `/proto/inspection/${encodeURIComponent(p.name)}` : undefined)} />
           )))}
           <OtherDocs scope={`p${i}`} hint="Specific to this part — material certificate and the like. Add as many as needed" />
         </div>

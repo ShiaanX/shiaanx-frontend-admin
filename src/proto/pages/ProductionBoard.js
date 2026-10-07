@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProtoData } from '../ProtoDataContext';
-import { JOB_STATUSES, PARTNER_JOBS } from '../fixtures';
+import { JOB_STATUSES, JOB_STATUS_LABEL, PARTNER_JOBS } from '../fixtures';
 
 // Columns are JOB_STATUSES, the same vocabulary as an order's status timeline. In-house cards are
 // derived from the same rows as the list (so the two cannot drift apart) and can be dragged between
@@ -36,7 +36,7 @@ export default function ProductionBoard() {
 
   return (
     <div>
-      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every physical piece, by status. Each card is one part_job. Drag a card to change its status — partner-shop cards aren't linked to a job record yet, so they can't be dragged.</div></div></div>
+      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every part in an order or a job being produced, by stage. A new order starts in the queue. Drag a card to change its stage — partner-shop cards aren't linked to a job record yet, so they can't be dragged.</div></div></div>
       <div className="board">
         {JOB_STATUSES.map(status => {
           const col = jobs.filter(j => j.status === status);
@@ -48,7 +48,7 @@ export default function ProductionBoard() {
               onDragLeave={() => setOverCol(c => (c === status ? null : c))}
               onDrop={(e) => { e.preventDefault(); onDrop(status); }}
             >
-              <div className="board-col-head"><span>{status}</span><span className="count">{col.length}</span></div>
+              <div className="board-col-head"><span>{JOB_STATUS_LABEL[status]}</span><span className="count">{col.length}</span></div>
               <div className="board-col-body">
                 {col.length === 0 && <div className="empty-hint">{overCol === status ? 'Drop here' : 'Empty'}</div>}
                 {col.map(j => (

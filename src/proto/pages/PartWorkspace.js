@@ -1,45 +1,55 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
-import { VerdictBadge } from '../components/Badges';
 import DownloadLink from '../components/DownloadLink';
 import ProtoCadViewer from '../components/ProtoCadViewer';
 import { useProtoData } from '../ProtoDataContext';
 
-const TABS = [['overview', 'Overview'], ['datums', 'Datums'], ['dims', 'Dimensions'], ['fixture', 'Fixture']];
+const TABS = [['overview', 'Overview'], ['datums', 'Datums'], ['fixture', 'Fixture']];
 const PLAN_CLS = { APPROVED: 'b-done', DRAFT: 'b-quoted', PENDING: 'b-neutral' };
 
 function Empty({ children }) {
   return <div className="card" style={{ marginBottom: 0 }}><div className="empty-hint">{children}</div></div>;
 }
 
-// One part template at a time, picked from the selector. The 3D pane is a placeholder until the
-// labeling_app viewer is wired in.
+// The tech-generated CAM program for one part: the 3D model, what the CAPP pipeline planned
+// (overview), datums and fixture. Not a page of its own in the sidebar — it is opened from a job,
+// through View on the part's AI-generated CAM program line (or View 3D on its CAD file).
+// Dimensions are quality data and live on the inspection report view instead.
 export default function PartWorkspace() {
   const params = useParams();
   const navigate = useNavigate();
-  const { partLibrary, rows } = useProtoData();
+  const { partLibrary, rows, artifactState, openFile } = useProtoData();
   const [tab, setTab] = useState('overview');
-  const tmplId = partLibrary[params.tmplId] ? params.tmplId : 'TMPL-BASEPLATE';
+  const tmplId = params.tmplId;
   const d = partLibrary[tmplId];
 
-  // Find the enquiry/order this part belongs to, so Back goes back to the record that links to
-  // it rather than just the browser's previous page.
+  // The job this part belongs to: Back returns there, and its documents hold the program sheet.
   const owner = rows.find(r => r.parts.some(p => p.tmpl === tmplId));
   const backTo = owner ? (owner.isOrder ? `/proto/orders/${owner.orderId}` : `/proto/enquiries/${owner.id}`) : null;
   const backLabel = owner ? `Back to ${owner.isOrder ? owner.orderId : owner.id}` : 'Back';
+  const back = (
+    <button type="button" className="back-link" onClick={() => (backTo ? navigate(backTo) : navigate(-1))}>
+      <Icon name="back" /> {backLabel}
+    </button>
+  );
+  if (!d) return <div>{back}<div className="card"><div className="empty-hint">This part was not found.</div></div></div>;
+
+  const partIndex = owner ? owner.parts.findIndex(p => p.tmpl === tmplId) : -1;
+  const docs = owner ? (artifactState[owner.orderId] || artifactState[owner.id] || {}) : {};
+  const legacyPlan = docs.plan && docs.plan.files ? docs.plan.files.find(f => String(f.fileKey).endsWith(`:plan:${partIndex}`)) : null;
+  const sheetKey = (docs[`p${partIndex}.plan`] && docs[`p${partIndex}.plan`].fileKey) || (legacyPlan && legacyPlan.fileKey) || null;
 
   return (
     <div>
-      <button type="button" className="back-link" onClick={() => (backTo ? navigate(backTo) : navigate(-1))}>
-        <Icon name="back" /> {backLabel}
-      </button>
+      {back}
       <div className="page-head">
-        <div><h1>{d.name}</h1><div className="page-sub">{tmplId} · rev {d.rev} · {d.customer}</div></div>
+        <div><h1>{d.name}</h1><div className="page-sub">CAM program · {d.customer} · rev {d.rev}</div></div>
         <div className="head-actions">
-          <select aria-label="Part" value={tmplId} onChange={e => { setTab('overview'); navigate(`/proto/parts/${e.target.value}`); }}>
-            {Object.entries(partLibrary).map(([id, p]) => <option key={id} value={id}>{p.name} — {p.customer}</option>)}
-          </select>
+          <button type="button" className="btn btn-ghost" disabled={!sheetKey} onClick={() => openFile(sheetKey)}
+            title={sheetKey ? '' : 'Generate the CAM program on the job first'}>
+            <Icon name="doc" size={14} /> Program sheet (PDF)
+          </button>
         </div>
       </div>
       {d.note && <div className="stub-note"><Icon name="info" /><div>{d.note}</div></div>}
@@ -56,7 +66,6 @@ export default function PartWorkspace() {
                 <circle cx="45" cy="35" r="7" stroke="#cfe0ef" /><circle cx="145" cy="45" r="7" stroke="#cfe0ef" />
                 <circle cx="40" cy="120" r="7" stroke="#cfe0ef" /><circle cx="140" cy="128" r="7" stroke="#cfe0ef" />
               </svg>
-              <div className="viewer-tools"><button type="button">Shaded</button><button type="button">Wireframe</button><button type="button">Fit all</button></div>
             </div>
           )}
           {d.cadFileKey && (
@@ -88,17 +97,6 @@ export default function PartWorkspace() {
               <div className="mini-grid">{d.datums.map(([k, v]) => <div key={k}><span className="ml">{k}</span><span className="mv">{v}</span></div>)}</div>
             </div>
           ) : <Empty>Datums not yet tagged.</Empty>)}
-          {tab === 'dims' && (d.dims ? (
-            <div className="dim-list">
-              {d.dims.map(dm => (
-                <div className="dim-row" key={dm.b}>
-                  <div className={`dim-ball ${dm.v}`}>{dm.b}</div>
-                  <div className="dim-main"><b>{dm.label}</b><span>Balloon {dm.b}</span></div>
-                  <VerdictBadge v={dm.v} />
-                </div>
-              ))}
-            </div>
-          ) : <Empty>Ballooned drawing not yet tagged.</Empty>)}
           {tab === 'fixture' && (d.fixture ? (
             <div className="card" style={{ marginBottom: 0 }}>
               <dl className="kv">{d.fixture.map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}</dl>

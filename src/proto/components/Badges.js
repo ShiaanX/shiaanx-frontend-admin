@@ -1,4 +1,5 @@
 import React from 'react';
+import { JOB_STATUS_LABEL } from '../fixtures';
 
 const STATUS_CLS = {
   PENDING: 'b-pending', QUOTED: 'b-quoted', ORDERED: 'b-ordered', IN_PRODUCTION: 'b-inprogress',
@@ -8,9 +9,9 @@ export function StatusBadge({ status }) {
   return <span className={`badge ${STATUS_CLS[status] || 'b-neutral'}`}>{status.replace('_', ' ')}</span>;
 }
 
-const JOB_STATUS_CLS = { PLANNED: 'b-neutral', SCHEDULED: 'b-quoted', MACHINING: 'b-inprogress', QC: 'b-near', DISPATCHED: 'b-done' };
+const JOB_STATUS_CLS = { IN_QUEUE: 'b-neutral', PROCESS_PLANNING: 'b-quoted', SCHEDULING: 'b-quoted', PRODUCTION: 'b-inprogress', QC: 'b-near', DISPATCHED: 'b-done' };
 export function JobStatusBadge({ status }) {
-  return <span className={`badge ${JOB_STATUS_CLS[status] || 'b-neutral'}`}>{status}</span>;
+  return <span className={`badge ${JOB_STATUS_CLS[status] || 'b-neutral'}`}>{JOB_STATUS_LABEL[status] || status}</span>;
 }
 
 const VERDICT = { pass: ['b-pass', 'Within tolerance'], near: ['b-near', 'Close to limit'], fail: ['b-fail', 'Out of tolerance'] };

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { ROWS, INITIAL_CUSTOMERS, INITIAL_ARTIFACT_STATE, PART_LIBRARY, MATERIAL_OPTIONS, FINISH_OPTIONS } from './fixtures';
+import { LEGACY_JOB_STATUS, ROWS, INITIAL_CUSTOMERS, INITIAL_ARTIFACT_STATE, PART_LIBRARY, MATERIAL_OPTIONS, FINISH_OPTIONS, SETTINGS } from './fixtures';
 import { kvGet, kvSet, fileSave, fileGet, fileOpen, fileDownload } from './db';
 
 // Everything you add in the preview — new enquiries, customers, uploads, checklist state — is kept
@@ -13,7 +13,15 @@ const K = {
   artifactState: 'artifactState', clientReleased: 'clientReleased', sampleDataOn: 'sampleDataOn',
   userMaterials: 'userMaterials', userFinishes: 'userFinishes', rowOverrides: 'rowOverrides',
   partStatusOverrides: 'partStatusOverrides', customerOverrides: 'customerOverrides', deletedCustomers: 'deletedCustomers',
-  autoQuoteState: 'autoQuoteState', partLibraryOverrides: 'partLibraryOverrides', cappUrl: 'cappUrl',
+  autoQuoteState: 'autoQuoteState', partLibraryOverrides: 'partLibraryOverrides', cappUrl: 'cappUrl', settingsTables: 'settingsTables',
+};
+
+// Settings lists as rows of strings, seeded from the sample values.
+const INITIAL_SETTINGS = {
+  users: SETTINGS.users.map(r => r.slice(0, 2)),
+  materials: SETTINGS.materials.map(r => r.slice(0, 3)),
+  tools: SETTINGS.tools.map(r => r.slice(0, 3)),
+  machines: SETTINGS.machines.map(r => r.slice(0, 3)),
 };
 
 const DEFAULT_CAPP_URL = 'http://localhost:8001';
@@ -59,6 +67,7 @@ export function ProtoDataProvider({ children }) {
   // workspace view (drawing/finish) can be revised too, same as a row.
   const [partLibraryOverrides, setPartLibraryOverrides] = useState({});
   const [cappUrl, setCappUrlState] = useState(DEFAULT_CAPP_URL);
+  const [settingsTables, setSettingsTables] = useState(INITIAL_SETTINGS);
   // Live status of a running Generate, keyed `${jobId}:${artifactId}` — {text} while running,
   // {error} if it failed. Not persisted.
   const [artifactProgress, setArtifactProgress] = useState({});
@@ -82,6 +91,7 @@ export function ProtoDataProvider({ children }) {
       setAutoQuoteState(await kvGet(K.autoQuoteState, {}));
       setPartLibraryOverrides(await kvGet(K.partLibraryOverrides, {}));
       setCappUrlState(await kvGet(K.cappUrl, DEFAULT_CAPP_URL));
+      setSettingsTables({ ...INITIAL_SETTINGS, ...(await kvGet(K.settingsTables, {})) });
       setLoaded(true);
     })();
   }, []);
@@ -252,6 +262,10 @@ export function ProtoDataProvider({ children }) {
     }
   }, [nextId, patchRow, patchPartLibrary]);
 
+  const setSettingsTable = useCallback((name, tableRows) => {
+    setSettingsTables(prev => { const next = { ...prev, [name]: tableRows }; kvSet(K.settingsTables, next); return next; });
+  }, []);
+
   const setCappUrl = useCallback((url) => {
     const clean = (url || '').trim().replace(/\/+$/, '') || DEFAULT_CAPP_URL;
     setCappUrlState(clean);
@@ -293,7 +307,7 @@ export function ProtoDataProvider({ children }) {
         try {
           res = await fetch(`${cappUrl}/jobs`, { method: 'POST', body });
         } catch (e) {
-          throw new Error(`Could not reach the CAPP service at ${cappUrl}. It has to be running on this computer — see Settings → CAPP service for how to start it.`);
+          throw new Error(`Could not reach the CAPP service at ${cappUrl}. It has to be running on this computer for the CAM program to be generated.`);
         }
         if (!res.ok) throw new Error(`CAPP service refused the file (${res.status}).`);
         const { job_id: cappJob } = await res.json();
@@ -502,6 +516,12 @@ export function ProtoDataProvider({ children }) {
   // "+ Add new…" in the New Enquiry form's Material/Finish fields. Added once, remembered after —
   // the next enquiry sees it as a normal option.
   const addMaterial = useCallback((name) => {
+    setSettingsTables(prev => {
+      if (prev.materials.some(m => m[0] === name)) return prev;
+      const next = { ...prev, materials: [...prev.materials, [name, '', '']] };
+      kvSet(K.settingsTables, next);
+      return next;
+    });
     setUserMaterials(prev => (prev.includes(name) ? prev : (() => { const next = [...prev, name]; kvSet(K.userMaterials, next); return next; })()));
   }, []);
   const addFinish = useCallback((name) => {
@@ -512,6 +532,13 @@ export function ProtoDataProvider({ children }) {
     let out = rowOverrides[r.id] ? { ...r, ...rowOverrides[r.id] } : r;
     const partPatch = partStatusOverrides[r.id];
     if (partPatch) out = { ...out, parts: out.parts.map((p, i) => (partPatch[i] ? { ...p, jobStatus: partPatch[i] } : p)) };
+    // Anything being made — an order, or a job produced without one — is on the board from the
+    // start: a part with no stage yet is in the queue. Stage names saved before the rename map over.
+    const inProduction = out.isOrder || out.jobType === 'TRIAL';
+    out = { ...out, parts: out.parts.map(p => {
+      const st = LEGACY_JOB_STATUS[p.jobStatus] || p.jobStatus || (inProduction ? 'IN_QUEUE' : undefined);
+      return st === p.jobStatus ? p : { ...p, jobStatus: st };
+    }) };
     return out;
   };
   const rows = (sampleDataOn ? [...userRows, ...ROWS] : [...userRows]).map(applyOverride);
@@ -523,7 +550,7 @@ export function ProtoDataProvider({ children }) {
     tmpl, partLibraryOverrides[tmpl] ? { ...p, ...partLibraryOverrides[tmpl] } : p,
   ]));
 
-  const materials = [...MATERIAL_OPTIONS, ...userMaterials];
+  const materials = [...new Set([...MATERIAL_OPTIONS, ...settingsTables.materials.map(m => m[0]), ...userMaterials])].filter(Boolean);
   const finishes = [...FINISH_OPTIONS, ...userFinishes];
 
   const value = {
@@ -534,6 +561,7 @@ export function ProtoDataProvider({ children }) {
     addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, updateQuote, setPartStatus,
     applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
+    settingsTables, setSettingsTable,
     cappUrl, setCappUrl, generateProcessPlan, artifactProgress, addOtherDocument, removeOtherDocument,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,

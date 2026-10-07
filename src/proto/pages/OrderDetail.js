@@ -6,9 +6,8 @@ import ClosedLoopCard from '../components/ClosedLoopCard';
 import ArtifactChecklist from '../components/ArtifactChecklist';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
-import { JOB_STATUSES } from '../fixtures';
+import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
 
-const STAGE_LABEL = { PLANNED: 'Plan approved', SCHEDULED: 'Scheduled', MACHINING: 'Machining', QC: 'QC', DISPATCHED: 'Dispatched' };
 
 export default function OrderDetail() {
   const { orderId } = useParams();
@@ -59,7 +58,7 @@ export default function OrderDetail() {
               <div className="tl-item"><div className="tl-t">Order placed</div><div className="tl-d">{fmtDate(r.orderDate)}</div></div>
               {JOB_STATUSES.map((s, i) => (
                 <div key={s} className={`tl-item ${i > stage ? 'future' : ''}`}>
-                  <div className="tl-t">{STAGE_LABEL[s]}</div>
+                  <div className="tl-t">{JOB_STATUS_LABEL[s]}</div>
                   <div className="tl-d">{i > stage ? 'Pending' : i < stage || s === 'DISPATCHED' ? 'Done' : 'In progress'}</div>
                 </div>
               ))}

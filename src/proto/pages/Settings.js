@@ -1,93 +1,95 @@
-import React from 'react';
-import { SETTINGS } from '../fixtures';
+import React, { useState } from 'react';
+import Icon from '../icons';
 import { useProtoData } from '../ProtoDataContext';
 
-const RUN_CLS = { Running: 'b-inprogress', Idle: 'b-neutral', Active: 'b-done', Invited: 'b-neutral' };
+// One editable list: rows are arrays of strings, one per column. A row is edited in place; Add
+// opens a blank row in edit mode, and a row left completely blank is dropped rather than saved.
+function EditableTable({ title, addLabel, columns, rows, onChange }) {
+  const [editing, setEditing] = useState(null); // { index, draft, isNew }
+
+  const start = (index) => setEditing({ index, draft: columns.map((_, c) => rows[index][c] || ''), isNew: false });
+  const add = () => setEditing({ index: rows.length, draft: columns.map(() => ''), isNew: true });
+  const cancel = () => setEditing(null);
+  const save = () => {
+    const draft = editing.draft.map(v => v.trim());
+    if (draft.every(v => !v)) { setEditing(null); return; }
+    const next = rows.slice();
+    next[editing.index] = draft;
+    onChange(next);
+    setEditing(null);
+  };
+  const remove = (index) => {
+    if (window.confirm(`Remove ${rows[index][0] || 'this row'}?`)) onChange(rows.filter((_, i) => i !== index));
+  };
+  const setCell = (c, v) => setEditing(e => ({ ...e, draft: e.draft.map((x, i) => (i === c ? v : x)) }));
+
+  const editRow = (key) => (
+    <tr key={key}>
+      {columns.map((col, c) => (
+        <td key={col.label}>
+          <div className="field">
+            <input autoFocus={c === 0} value={editing.draft[c]} placeholder={col.placeholder || col.label}
+              onChange={e => setCell(c, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }} />
+          </div>
+        </td>
+      ))}
+      <td>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn-sm primary" onClick={save}>Save</button>
+          <button type="button" className="btn-sm text" onClick={cancel}>Cancel</button>
+        </div>
+      </td>
+    </tr>
+  );
+
+  return (
+    <div data-table={title}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '26px 0 12px' }}>
+        <h3 style={{ margin: 0 }}>{title}</h3>
+        <button type="button" className="btn-sm ghost" disabled={!!editing} onClick={add}><Icon name="plus" size={12} /> {addLabel}</button>
+      </div>
+      <div className="tablecard overflow-x">
+        <table className="data">
+          <thead><tr>{columns.map(col => <th key={col.label}>{col.label}</th>)}<th /></tr></thead>
+          <tbody>
+            {rows.length === 0 && !editing && <tr><td colSpan={columns.length + 1}><div className="empty-hint">Nothing here yet.</div></td></tr>}
+            {rows.map((r, i) => (editing && !editing.isNew && editing.index === i ? editRow(i) : (
+              <tr key={i}>
+                {columns.map((col, c) => <td key={col.label} className={c === 0 ? 'cell-primary' : (col.mono ? 'mono' : '')}>{r[c] || '—'}</td>)}
+                <td>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn-text" disabled={!!editing} onClick={() => start(i)}>Edit</button>
+                    <button type="button" className="btn-text" disabled={!!editing} style={{ color: 'var(--error)' }} onClick={() => remove(i)}>Remove</button>
+                  </div>
+                </td>
+              </tr>
+            )))}
+            {editing && editing.isNew && editRow('new')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export default function Settings() {
-  const { cappUrl, setCappUrl } = useProtoData();
-  const [urlDraft, setUrlDraft] = React.useState(cappUrl);
-  const [health, setHealth] = React.useState('');
-  React.useEffect(() => { setUrlDraft(cappUrl); }, [cappUrl]);
-  const test = async () => {
-    setHealth('Checking…');
-    try {
-      const res = await fetch(`${urlDraft.replace(/\/+$/, '')}/openapi.json`);
-      setHealth(res.ok ? 'Connected — the CAPP service is answering.' : `Reached it, but it answered ${res.status}.`);
-    } catch (e) {
-      setHealth('Not reachable. The service is not running at this address.');
-    }
-  };
+  const { settingsTables, setSettingsTable } = useProtoData();
   return (
     <div>
-      <div className="page-head"><div><h1>Settings</h1><div className="page-sub">Admin config only — customers live under Sales; machine tool slots and a partner directory are parked for now.</div></div></div>
+      <div className="page-head"><div><h1>Settings</h1><div className="page-sub">The lists the rest of the app draws on. Customers live under Sales.</div></div></div>
 
-      <h3 style={{ marginTop: 0 }}>CAPP service</h3>
-      <div className="card">
-        <p className="page-sub" style={{ margin: '0 0 12px' }}>
-          Generate on a part's <b>CAM program</b> (AI generated) sends the part's STEP file here and gets the real program sheet back from the CAPP pipeline. It runs on your own computer, so it only works in a browser on the machine where it is running.
-        </p>
-        <div className="field">
-          <label>Service address</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)} placeholder="http://localhost:8001" />
-            <button type="button" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={test}>Test</button>
-            <button type="button" className="btn px-btn-primary" onClick={() => setCappUrl(urlDraft)}>Save</button>
-          </div>
-        </div>
-        {health && <p className="page-sub" style={{ margin: '10px 0 0' }}>{health}</p>}
-        <p className="page-sub" style={{ margin: '12px 0 4px' }}>To start it, run this in a terminal from the <span className="mono">ShiaanX\capp_service</span> folder and leave the window open:</p>
-        <pre className="mono" style={{ margin: 0, padding: 12, background: 'var(--shell-bg)', borderRadius: 8, overflowX: 'auto' }}>{'& "C:\\Users\\Siddhant Gupta\\miniconda3\\envs\\occ\\python.exe" -m uvicorn main:app --port 8001'}</pre>
-      </div>
+      <EditableTable title="Users" addLabel="Add user" rows={settingsTables.users} onChange={r => setSettingsTable('users', r)}
+        columns={[{ label: 'Name', placeholder: 'e.g. Priya Sharma' }, { label: 'Designation', placeholder: 'e.g. Process engineer' }]} />
 
-      <h3>Users &amp; roles</h3>
-      <div className="tablecard overflow-x">
-        <table className="data">
-          <thead><tr><th>Name</th><th>Role</th><th>Status</th></tr></thead>
-          <tbody>
-            {SETTINGS.users.map(([name, role, status]) => (
-              <tr key={name}><td className="cell-primary">{name}</td><td>{role}</td><td><span className={`badge ${RUN_CLS[status] || 'b-neutral'}`}>{status}</span></td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <EditableTable title="Materials & finishes" addLabel="Add material" rows={settingsTables.materials} onChange={r => setSettingsTable('materials', r)}
+        columns={[{ label: 'Material', placeholder: 'e.g. Aluminium 6082' }, { label: 'Rate', placeholder: '₹ 450/kg', mono: true }, { label: 'Finishes available', placeholder: 'As machined, Anodised' }]} />
 
-      <h3>Materials &amp; finishes</h3>
-      <div className="tablecard overflow-x">
-        <table className="data">
-          <thead><tr><th>Material</th><th>Rate</th><th>Finishes available</th></tr></thead>
-          <tbody>
-            {SETTINGS.materials.map(([material, rate, finishes]) => (
-              <tr key={material}><td className="cell-primary">{material}</td><td className="mono">{rate}</td><td>{finishes}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <EditableTable title="Tool catalogue" addLabel="Add tool" rows={settingsTables.tools} onChange={r => setSettingsTable('tools', r)}
+        columns={[{ label: 'Tool code', placeholder: 'e.g. EM_2FL_8MM' }, { label: 'Type', placeholder: 'End mill, 2-flute' }, { label: 'Diameter', placeholder: '8 mm' }]} />
 
-      <h3>Tool catalogue</h3>
-      <div className="tablecard overflow-x">
-        <table className="data">
-          <thead><tr><th>Tool code</th><th>Type</th><th>Diameter</th><th>Source</th></tr></thead>
-          <tbody>
-            {SETTINGS.tools.map(([code, type, dia]) => (
-              <tr key={code}><td className="mono cell-primary">{code}</td><td>{type}</td><td>{dia}</td><td className="cell-sub">tool_database.json</td></tr>
-            ))}
-            <tr><td colSpan={4} className="empty-hint">42 tools total</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h3>Machines</h3>
-      <div className="tablecard overflow-x">
-        <table className="data">
-          <thead><tr><th>Machine</th><th>Controller</th><th>Magazine</th><th>Status</th></tr></thead>
-          <tbody>
-            {SETTINGS.machines.map(([machine, controller, magazine, status]) => (
-              <tr key={machine}><td className="cell-primary">{machine}</td><td>{controller}</td><td>{magazine}</td><td><span className={`badge ${RUN_CLS[status] || 'b-neutral'}`}>{status}</span></td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <EditableTable title="Machines" addLabel="Add machine" rows={settingsTables.machines} onChange={r => setSettingsTable('machines', r)}
+        columns={[{ label: 'Machine', placeholder: 'e.g. VMC-03' }, { label: 'Controller', placeholder: 'Fanuc 0iMD' }, { label: 'Magazine', placeholder: '20 slots' }]} />
     </div>
   );
 }

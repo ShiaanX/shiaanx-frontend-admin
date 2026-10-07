@@ -14,21 +14,19 @@ import CamPrograms from './pages/CamPrograms';
 import ClosedLoop from './pages/ClosedLoop';
 import Inspection from './pages/Inspection';
 import Settings from './pages/Settings';
-import Factory from './pages/Factory';
 
 const NAV = [
   { to: '/proto', end: true, icon: 'base', label: 'Enquiries & Orders', crumb: 'Sales / Enquiries & Orders' },
-  { to: '/proto/parts', icon: 'part', label: 'Part Workspace', crumb: 'Engineering / Part Workspace' },
   { to: '/proto/board', icon: 'board', label: 'Production Board', crumb: 'Production / Production Board' },
   { to: '/proto/cam', icon: 'cam', label: 'CAM Programs', crumb: 'Production / CAM Programs' },
   { to: '/proto/closed-loop', icon: 'knowledge', label: 'Closed Loop', crumb: 'Production / Closed Loop' },
-  { to: '/proto/factory', icon: 'factory', label: 'Factory', crumb: 'Factory / Machines & Rules' },
   { to: '/proto/settings', icon: 'settings', label: 'Settings', crumb: 'Admin / Settings' },
 ];
 
 function crumbFor(pathname) {
   if (pathname.startsWith('/proto/customers')) return 'Sales / Customers';
-  if (pathname.startsWith('/proto/inspection')) return 'Closed Loop / Inspection';
+  if (pathname.startsWith('/proto/parts')) return 'Enquiries & Orders / CAM program';
+  if (pathname.startsWith('/proto/inspection')) return 'Enquiries & Orders / Inspection report';
   if (pathname.startsWith('/proto/orders') || pathname.startsWith('/proto/enquiries')) return 'Sales / Enquiries & Orders';
   const hit = NAV.slice().reverse().find(n => pathname.startsWith(n.to) && (n.to !== '/proto' || pathname === '/proto'));
   return hit ? hit.crumb : 'Sales / Enquiries & Orders';
@@ -91,14 +89,12 @@ export default function ProtoApp() {
           <Route path="enquiries/:id" element={<EnquiryDetail />} />
           <Route path="orders/:orderId" element={<OrderDetail />} />
           <Route path="customers" element={<Customers />} />
-          <Route path="parts" element={<PartWorkspace />} />
           <Route path="parts/:tmplId" element={<PartWorkspace />} />
           <Route path="board" element={<ProductionBoard />} />
           <Route path="cam" element={<CamPrograms />} />
           <Route path="closed-loop" element={<ClosedLoop />} />
           <Route path="closed-loop/:partId" element={<ClosedLoop />} />
           <Route path="inspection/:part" element={<Inspection />} />
-          <Route path="factory" element={<Factory />} />
           <Route path="settings" element={<Settings />} />
         </Routes>
       </Shell>
