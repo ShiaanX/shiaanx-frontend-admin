@@ -103,7 +103,9 @@ export const INSPECTION_BY_PART = {
 const PENDING_PART = { setups: 'Not yet planned', operations: '—', stock: '—', planStatus: 'PENDING', datums: null, dims: null, fixture: null };
 
 export const PART_LIBRARY = {
-  'TMPL-BASEPLATE': { name: 'Heat-Sink Base Plate', customer: 'Client A', rev: 'A',
+  // qcJobId: this part's job in the labeling app (its drawing dimensions are already tagged there),
+  // so its 3D QC view opens without any setup.
+  'TMPL-BASEPLATE': { name: 'Heat-Sink Base Plate', customer: 'Client A', rev: 'A', qcJobId: 'a4838b441e4b',
     setups: '2 — G54 top face, G55 flip', operations: '14, across both setups', stock: '112 × 82 × 10 mm copper billet',
     programSource: 'HUMAN_PROGRAMMED · v1 · ACTIVE', planStatus: 'APPROVED',
     datums: [['Datum A', 'Bottom face'], ['Datum B', 'Long edge'], ['Datum C', 'Ø9 hole']], dims: DIMENSIONS,
