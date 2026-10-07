@@ -263,14 +263,14 @@ export function ProtoDataProvider({ children }) {
   // program sheet PDF it returns is stored as the artifact. The setups / operations / envelope it
   // works out also fill that part's Part Workspace overview. The service has to be running and
   // reachable from this browser; if it isn't, this says so rather than faking a result.
-  const generateProcessPlan = useCallback(async (jobId, row) => {
-    const pKey = `${jobId}:plan`;
+  const generateProcessPlan = useCallback(async (jobId, row, partIndex) => {
+    const pKey = `${jobId}:p${partIndex}.plan`;
     const say = (text) => setArtifactProgress(prev => ({ ...prev, [pKey]: { text } }));
     const fail = (error) => setArtifactProgress(prev => ({ ...prev, [pKey]: { error } }));
 
-    const targets = row.parts.map((p, i) => ({ p, i })).filter(t => t.p.fileKey);
+    const targets = row.parts.map((p, i) => ({ p, i })).filter(t => t.i === partIndex && t.p.fileKey);
     if (targets.length === 0) {
-      fail('No STEP file is attached to this job, and the process plan is worked out from the STEP file. Attach one to the part first.');
+      fail('No STEP file is attached to this part, and the process plan is worked out from the STEP file. Attach one first.');
       return;
     }
 
@@ -334,11 +334,10 @@ export function ProtoDataProvider({ children }) {
     }
 
     const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const totals = `${summaries.reduce((s, x) => s + x.setups, 0)} setup(s), ${summaries.reduce((s, x) => s + x.ops, 0)} operations`;
-    const skipped = row.parts.length - targets.length;
-    const note = [`CAPP pipeline · ${when} · ${totals}`, skipped ? `${skipped} part(s) skipped, no STEP file` : '', ...notes].filter(Boolean).join(' · ');
+    const totals = `${summaries[0].setups} setup(s), ${summaries[0].ops} operations`;
+    const note = [`CAPP pipeline · ${when} · ${totals}`, ...notes].filter(Boolean).join(' · ');
     setArtifactState(prev => {
-      const next = { ...prev, [jobId]: { ...(prev[jobId] || {}), plan: { done: true, fileKey: files[0].fileKey, files, note } } };
+      const next = { ...prev, [jobId]: { ...(prev[jobId] || {}), [`p${partIndex}.plan`]: { done: true, fileKey: files[0].fileKey, note } } };
       kvSet(K.artifactState, next);
       return next;
     });
@@ -456,6 +455,31 @@ export function ProtoDataProvider({ children }) {
     });
   }, []);
 
+  const addOtherDocument = useCallback(async (jobId, scope, file) => {
+    const fileKey = `${jobId}:${scope}.other:${Date.now().toString(36)}`;
+    await fileSave(fileKey, file);
+    const at = new Date().toISOString();
+    setArtifactState(prev => {
+      const key = `${scope}.other`;
+      const job = prev[jobId] || {};
+      const items = [...((job[key] && job[key].items) || []), { fileKey, name: file.name, at }];
+      const next = { ...prev, [jobId]: { ...job, [key]: { items } } };
+      kvSet(K.artifactState, next);
+      return next;
+    });
+  }, []);
+
+  const removeOtherDocument = useCallback((jobId, scope, fileKey) => {
+    setArtifactState(prev => {
+      const key = `${scope}.other`;
+      const job = prev[jobId] || {};
+      const items = ((job[key] && job[key].items) || []).filter(it => it.fileKey !== fileKey);
+      const next = { ...prev, [jobId]: { ...job, [key]: { items } } };
+      kvSet(K.artifactState, next);
+      return next;
+    });
+  }, []);
+
   const openArtifactFile = useCallback((jobId, artifactId) => fileOpen(`${jobId}:${artifactId}`), []);
   const openFile = useCallback((fileKey) => fileOpen(fileKey), []);
   const downloadFile = useCallback((fileKey) => fileDownload(fileKey), []);
@@ -510,7 +534,7 @@ export function ProtoDataProvider({ children }) {
     addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, updateQuote, setPartStatus,
     applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
-    cappUrl, setCappUrl, generateProcessPlan, artifactProgress,
+    cappUrl, setCappUrl, generateProcessPlan, artifactProgress, addOtherDocument, removeOtherDocument,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
     getClientReleased, toggleClientRelease,
   };

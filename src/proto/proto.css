@@ -291,3 +291,14 @@
 .proto-app .field input.invalid, .proto-app .field select.invalid { border-color: var(--error); background: #fff5f5; }
 .proto-app .field-error { color: var(--error-ink); font-size: 12px; font-weight: 600; }
 .proto-app .btn:disabled, .proto-app .btn-sm:disabled, .proto-app .btn-text:disabled { opacity: .45; cursor: not-allowed; }
+
+.proto-app .doc-part-head { display: flex; align-items: center; gap: 8px; margin: 18px 0 2px; padding: 9px 12px; background: var(--shell-bg); border-radius: 9px; font-weight: 700; font-size: 13px; }
+.proto-app .doc-part-head .cell-sub { margin: 0; font-weight: 500; }
+.proto-app .doc-group-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 4px 0 0; }
+.proto-app .artifact-row.sub { padding-left: 46px; }
+
+/* Document rows: let the action buttons drop to their own line instead of squeezing the name
+   column to nothing or running out past the card edge. */
+.proto-app .artifact-row { flex-wrap: wrap; }
+.proto-app .artifact-row .art-main { flex: 1 1 240px; }
+.proto-app .artifact-row .art-actions { flex-shrink: 1; max-width: 100%; }
