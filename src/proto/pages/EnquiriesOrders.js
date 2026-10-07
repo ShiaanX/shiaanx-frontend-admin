@@ -97,7 +97,11 @@ export default function EnquiriesOrders() {
               <tr key={r.id} className="rowlink" onClick={() => openRow(r)}>
                 <td className="mono cell-primary">{r.id}{r.isOrder && <div className="cell-sub mono">{r.orderId}</div>}</td>
                 <td>{r.customer}</td>
-                <td>{r.parts.length}: {r.parts.map(p => p.name).join(', ')}</td>
+                <td>
+                  {r.assemblyName
+                    ? <>{r.assemblyName} <span className="cell-sub">({r.parts.length} part{r.parts.length === 1 ? '' : 's'})</span></>
+                    : `${r.parts.length}: ${r.parts.map(p => p.name).join(', ')}`}
+                </td>
                 <td><StatusBadge status={r.status} /></td>
                 <td>
                   {r.isOrder ? <span className="order-yes">Yes</span> : (

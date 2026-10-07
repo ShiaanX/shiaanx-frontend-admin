@@ -28,8 +28,11 @@ export default function NewEnquiryModal({ onClose }) {
   const [customerName, setCustomerName] = useState('');
   const [qa, setQa] = useState({ name: '', company: '', email: '', website: '', phone: '' });
   const [parts, setParts] = useState([emptyPart()]);
+  const [assemblyName, setAssemblyName] = useState('');
   const [remarks, setRemarks] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+  const [error, setError] = useState('');
 
   const saveQuickAdd = () => {
     const name = qa.name.trim() || 'New customer';
@@ -42,12 +45,26 @@ export default function NewEnquiryModal({ onClose }) {
   const addPart = () => setParts(prev => [...prev, emptyPart()]);
   const removePart = (key) => setParts(prev => (prev.length > 1 ? prev.filter(p => p.key !== key) : prev));
 
-  const hasAPartName = parts.some(p => p.partName.trim());
+  // Part name is the only required field. Clicking Create with one missing marks it in red rather
+  // than leaving a disabled button that looks like it's ignoring the click.
+  const missingName = (p) => !p.partName.trim();
   const create = async () => {
+    if (parts.some(missingName)) {
+      setShowErrors(true);
+      setTimeout(() => document.querySelector('.proto-app .invalid')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0);
+      return;
+    }
     setSaving(true);
-    const jobId = await createEnquiry({ customer: customerName, parts, remarks });
-    onClose();
-    navigate(`/proto/enquiries/${jobId}`);
+    setError('');
+    try {
+      const jobId = await createEnquiry({ customer: customerName, parts, remarks, assemblyName });
+      onClose();
+      navigate(`/proto/enquiries/${jobId}`);
+    } catch (e) {
+      console.error('Create failed:', e);
+      setError(`Could not create this enquiry: ${e.message || e}`);
+      setSaving(false);
+    }
   };
 
   return (
@@ -57,7 +74,7 @@ export default function NewEnquiryModal({ onClose }) {
       onClose={onClose}
       footer={<>
         <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn px-btn-primary" disabled={saving || !hasAPartName} onClick={create}>
+        <button type="button" className="btn px-btn-primary" disabled={saving} onClick={create}>
           {saving ? 'Creating…' : 'Create enquiry'}
         </button>
       </>}
@@ -84,7 +101,12 @@ export default function NewEnquiryModal({ onClose }) {
         </div>
       )}
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+        <label>Assembly / job name (optional)</label>
+        <input value={assemblyName} onChange={e => setAssemblyName(e.target.value)} placeholder="e.g. Pump Housing Assembly — leave blank to list parts by name" />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {parts.map((p, i) => (
           <div className="inline-add" key={p.key}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -92,7 +114,11 @@ export default function NewEnquiryModal({ onClose }) {
               {parts.length > 1 && <button type="button" className="btn-sm text" onClick={() => removePart(p.key)}>Remove</button>}
             </div>
             <div className="field-row">
-              <div className="field"><label>Part name</label><input value={p.partName} onChange={e => updatePart(p.key, { partName: e.target.value })} placeholder="e.g. Bracket, Base Plate" /></div>
+              <div className="field">
+                <label>Part name</label>
+                <input className={showErrors && missingName(p) ? 'invalid' : ''} value={p.partName} onChange={e => updatePart(p.key, { partName: e.target.value })} placeholder="e.g. Bracket, Base Plate" />
+                {showErrors && missingName(p) && <span className="field-error">Part name is required.</span>}
+              </div>
               <div className="field"><label>Quantity</label><input type="number" value={p.qty} onChange={e => updatePart(p.key, { qty: e.target.value })} min={1} /></div>
             </div>
             <div className="field-row">
@@ -107,7 +133,8 @@ export default function NewEnquiryModal({ onClose }) {
       </div>
 
       <div className="field"><label>Remarks (optional)</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Anything the team should know about this enquiry…" /></div>
-      {!hasAPartName && <p className="page-sub" style={{ margin: 0 }}>At least one part needs a name to create the enquiry.</p>}
+      {showErrors && parts.some(missingName) && <p className="field-error" style={{ margin: 0 }}>Not created yet — the fields marked in red above are missing.</p>}
+      {error && <p className="field-error" style={{ margin: 0 }}>{error}</p>}
     </Modal>
   );
 }

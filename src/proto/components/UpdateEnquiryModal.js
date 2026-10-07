@@ -22,19 +22,36 @@ const newPartForm = () => ({
 export default function UpdateEnquiryModal({ row, onClose }) {
   const { materials, finishes, addMaterial, addFinish, applyEnquiryUpdate } = useProtoData();
   const [parts, setParts] = useState(row.parts.map(existingPartForm));
+  const [assemblyName, setAssemblyName] = useState(row.assemblyName || '');
   const [remarks, setRemarks] = useState(row.remarks || '');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+  const [error, setError] = useState('');
 
   const updatePart = (key, patch) => setParts(prev => prev.map(p => (p.key === key ? { ...p, ...patch } : p)));
   const addPart = () => setParts(prev => [...prev, newPartForm()]);
   const removePart = (key) => setParts(prev => prev.filter(p => p.key !== key));
 
-  const hasAPartName = parts.every(p => (p.existing ? true : p.partName.trim())) && parts.length > 0;
+  // The button is never silently disabled: clicking it with something missing marks the field in
+  // red and scrolls to it, and a failed save says so instead of leaving the modal sitting there.
+  const missingName = (p) => !p.existing && !p.partName.trim();
   const save = async () => {
+    if (parts.some(missingName)) {
+      setShowErrors(true);
+      setTimeout(() => document.querySelector('.proto-app .invalid')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0);
+      return;
+    }
     setSaving(true);
-    await applyEnquiryUpdate(row, { remarks, parts, note });
-    onClose();
+    setError('');
+    try {
+      await applyEnquiryUpdate(row, { remarks, assemblyName, parts, note });
+      onClose();
+    } catch (e) {
+      console.error('Update failed:', e);
+      setError(`Could not save this update: ${e.message || e}`);
+      setSaving(false);
+    }
   };
 
   return (
@@ -44,7 +61,7 @@ export default function UpdateEnquiryModal({ row, onClose }) {
       onClose={onClose}
       footer={<>
         <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn px-btn-primary" disabled={!hasAPartName || saving} onClick={save}>
+        <button type="button" className="btn px-btn-primary" disabled={saving} onClick={save}>
           {saving ? 'Saving…' : 'Save update'}
         </button>
       </>}
@@ -52,6 +69,11 @@ export default function UpdateEnquiryModal({ row, onClose }) {
       <p className="page-sub" style={{ margin: 0 }}>
         Edit whatever's changed below — a revised drawing, a different quantity or material, or add a new part type entirely. Anything you replace on an existing part is kept in that part's revision history, not deleted.
       </p>
+
+      <div className="field">
+        <label>Assembly / job name (optional)</label>
+        <input value={assemblyName} onChange={e => setAssemblyName(e.target.value)} placeholder="e.g. Pump Housing Assembly — leave blank to list parts by name" />
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {parts.map((p, i) => (
@@ -61,7 +83,11 @@ export default function UpdateEnquiryModal({ row, onClose }) {
               {!p.existing && <button type="button" className="btn-sm text" onClick={() => removePart(p.key)}>Remove</button>}
             </div>
             {!p.existing && (
-              <div className="field"><label>Part name</label><input value={p.partName} onChange={e => updatePart(p.key, { partName: e.target.value })} placeholder="e.g. Bracket, Base Plate" /></div>
+              <div className="field">
+                <label>Part name</label>
+                <input className={showErrors && missingName(p) ? 'invalid' : ''} value={p.partName} onChange={e => updatePart(p.key, { partName: e.target.value })} placeholder="e.g. Bracket, Base Plate" />
+                {showErrors && missingName(p) && <span className="field-error">Give this new part a name, or remove it.</span>}
+              </div>
             )}
             <div className="field-row">
               <div className="field"><label>Quantity</label><input type="number" value={p.qty} onChange={e => updatePart(p.key, { qty: e.target.value })} min={1} /></div>
@@ -83,7 +109,8 @@ export default function UpdateEnquiryModal({ row, onClose }) {
 
       <div className="field"><label>Remarks</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Anything the team should know about this enquiry…" /></div>
       <div className="field"><label>What changed (optional note)</label><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Client sent Rev B drawings and dropped Part B's quantity to 3" /></div>
-      {!hasAPartName && <p className="page-sub" style={{ margin: 0 }}>Every new part needs a name.</p>}
+      {showErrors && parts.some(missingName) && <p className="field-error" style={{ margin: 0 }}>Not saved yet — the fields marked in red above are missing.</p>}
+      {error && <p className="field-error" style={{ margin: 0 }}>{error}</p>}
     </Modal>
   );
 }

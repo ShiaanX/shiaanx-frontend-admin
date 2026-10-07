@@ -83,7 +83,10 @@ export default function EnquiryDetail() {
     <div>
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
       <div className="detail-head">
-        <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /></div>
+        <div>
+          <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /></div>
+          {r.assemblyName && <div className="page-sub" style={{ marginTop: 2 }}>{r.assemblyName}</div>}
+        </div>
         <div className="head-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost" onClick={() => markNoOrderJob(r.id)}>Produce without a confirmed order</button>
@@ -95,6 +98,7 @@ export default function EnquiryDetail() {
           <div className="card">
             <h2><Icon name="info" /> Enquiry details</h2>
             <dl className="kv">
+              {r.assemblyName && <><dt>Assembly / job name</dt><dd>{r.assemblyName}</dd></>}
               <dt>Customer</dt><dd>{r.customer}</dd>
               <dt>Received</dt><dd>{fmtDate(r.date)}</dd>
               <dt>Parts</dt><dd>{r.parts.length}</dd>

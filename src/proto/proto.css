@@ -287,3 +287,7 @@
   .proto-app .sample-toggle-label { display: none; }
   .proto-app .preview-flag { display: none; }
 }
+
+.proto-app .field input.invalid, .proto-app .field select.invalid { border-color: var(--error); background: #fff5f5; }
+.proto-app .field-error { color: var(--error-ink); font-size: 12px; font-weight: 600; }
+.proto-app .btn:disabled, .proto-app .btn-sm:disabled, .proto-app .btn-text:disabled { opacity: .45; cursor: not-allowed; }

@@ -128,7 +128,10 @@ export function ProtoDataProvider({ children }) {
       };
     }
 
-    const row = { id: jobId, customer, date: today, status: 'PENDING', isOrder: false, remarks: form.remarks || '', parts };
+    const row = {
+      id: jobId, customer, date: today, status: 'PENDING', isOrder: false,
+      remarks: form.remarks || '', assemblyName: form.assemblyName || '', parts,
+    };
     setUserRows(prev => { const next = [...prev, row]; kvSet(K.userRows, next); return next; });
     setUserPartLibrary(prev => { const next = { ...prev, ...libraryEntries }; kvSet(K.userPartLibrary, next); return next; });
     return jobId;
@@ -160,7 +163,7 @@ export function ProtoDataProvider({ children }) {
   // `formParts` entries: existing ones carry {existing:true, originalIndex, qty, material, finish,
   // cadFile?, drawingFile?}; newly added ones carry {existing:false, partName, qty, material,
   // finish, cadFile?, drawingFile?}.
-  const applyEnquiryUpdate = useCallback(async (row, { remarks, parts: formParts, note }) => {
+  const applyEnquiryUpdate = useCallback(async (row, { remarks, assemblyName, parts: formParts, note }) => {
     const at = new Date().toISOString();
     const newParts = [];
     const libraryPatches = {};
@@ -218,7 +221,12 @@ export function ProtoDataProvider({ children }) {
     }
 
     const remarksChanged = remarks !== undefined && remarks !== row.remarks;
-    patchRow(row.id, { parts: newParts, ...(remarksChanged ? { remarks } : {}) });
+    const assemblyNameChanged = assemblyName !== undefined && assemblyName !== (row.assemblyName || '');
+    patchRow(row.id, {
+      parts: newParts,
+      ...(remarksChanged ? { remarks } : {}),
+      ...(assemblyNameChanged ? { assemblyName } : {}),
+    });
     Object.entries(libraryPatches).forEach(([tmpl, patch]) => patchPartLibrary(tmpl, patch));
     if (Object.keys(newLibraryEntries).length) {
       setUserPartLibrary(prev => { const next = { ...prev, ...newLibraryEntries }; kvSet(K.userPartLibrary, next); return next; });

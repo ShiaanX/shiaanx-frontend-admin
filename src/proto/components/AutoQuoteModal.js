@@ -64,9 +64,11 @@ export default function AutoQuoteModal({ row, partIndex, onClose }) {
         <div className="aq-modal" style={{ height: 'auto', maxWidth: 480 }}>
           <div className="aq-generating">
             <MdAutoAwesome style={{ fontSize: 40, color: 'var(--aq-teal)' }} />
-            <h2 className="aq-generating-title">No quote worked out yet</h2>
-            <p className="aq-generating-sub">Fill starting values for {part.name}, then adjust every line to the real figures before finalizing.</p>
-            <button className="aq-btn aq-btn-primary" style={{ marginTop: 16 }} onClick={handleGenerate}>Fill starting values</button>
+            <h2 className="aq-generating-title">Start a quote for {part.name}</h2>
+            <p className="aq-generating-sub">
+              This preview cannot read the CAD file yet, so it cannot calculate a price. It opens the quote sheet with standard placeholder numbers — the same for every part — which you then replace with the real figures.
+            </p>
+            <button className="aq-btn aq-btn-primary" style={{ marginTop: 16 }} onClick={handleGenerate}>Open quote sheet with placeholder numbers</button>
             <button className="aq-btn aq-btn-ghost" style={{ marginTop: 10 }} onClick={onClose}>Cancel</button>
           </div>
         </div>
@@ -82,7 +84,7 @@ export default function AutoQuoteModal({ row, partIndex, onClose }) {
             <div>
               <p className="aq-header-eyebrow">Auto-Quote / Cost breakdown</p>
               <h1 className="aq-header-title">{part.name}</h1>
-              <p className="aq-header-sub">{row.id}{S._source === 'placeholder' && status !== 'FINALIZED' ? ' · starting values, not yet reviewed' : ''}</p>
+              <p className="aq-header-sub">{row.id}{S._source === 'placeholder' && status !== 'FINALIZED' ? ' · placeholder numbers, not calculated from the CAD file' : ''}</p>
             </div>
           </div>
           <div className="aq-header-actions">
