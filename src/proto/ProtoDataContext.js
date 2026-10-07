@@ -270,7 +270,7 @@ export function ProtoDataProvider({ children }) {
 
     const targets = row.parts.map((p, i) => ({ p, i })).filter(t => t.i === partIndex && t.p.fileKey);
     if (targets.length === 0) {
-      fail('No STEP file is attached to this part, and the process plan is worked out from the STEP file. Attach one first.');
+      fail('No STEP file is attached to this part, and the CAM program is worked out from the STEP file. Attach one first.');
       return;
     }
 

@@ -25,7 +25,7 @@ export default function Settings() {
       <h3 style={{ marginTop: 0 }}>CAPP service</h3>
       <div className="card">
         <p className="page-sub" style={{ margin: '0 0 12px' }}>
-          Generate on a job's <b>Process plan</b> sends the part's STEP file here and gets the real program sheet back from the CAPP pipeline. It runs on your own computer, so it only works in a browser on the machine where it is running.
+          Generate on a part's <b>CAM program</b> (AI generated) sends the part's STEP file here and gets the real program sheet back from the CAPP pipeline. It runs on your own computer, so it only works in a browser on the machine where it is running.
         </p>
         <div className="field">
           <label>Service address</label>

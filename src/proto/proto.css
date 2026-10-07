@@ -302,3 +302,5 @@
 .proto-app .artifact-row { flex-wrap: wrap; }
 .proto-app .artifact-row .art-main { flex: 1 1 240px; }
 .proto-app .artifact-row .art-actions { flex-shrink: 1; max-width: 100%; }
+
+.proto-app .artifact-row .art-actions { margin-left: auto; }

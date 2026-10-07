@@ -10,8 +10,7 @@ import { fmtDate } from '../utils';
 //
 // For EACH part, the same set:
 //
-//   Process plan         AI
-//   CAM program          AI · Human
+//   CAM program          AI · Human   (the process plan and the CAM program are one document)
 //   Ballooned drawing    Human
 //   Inspection template  AI · Human
 //   Inspection report    Human
@@ -19,7 +18,7 @@ import { fmtDate } from '../utils';
 //
 // Each AI / Human line is its own slot with its own file, so a human-programmed CAM file and an
 // AI-generated one sit side by side. Human slots store the real uploaded file. Of the AI slots only
-// Process plan is connected (to the CAPP pipeline); the rest are tagged "Not connected yet".
+// CAM program is connected (to the CAPP pipeline); the rest are tagged "Not connected yet".
 const SRC_LABEL = { ai: 'AI generated', human: 'Human generated', tech: 'Tech-generated' };
 
 const JOB_DOCS = [
@@ -31,9 +30,10 @@ const JOB_DOCS = [
 // `legacy` is the job-level key the same document used before documents became per-part; a part's
 // first slot falls back to it so earlier uploads and the sample jobs keep showing.
 const PART_DOCS = [
-  { id: 'plan', name: 'Process plan', slots: [{ src: 'ai', real: true, legacy: 'plan', pending: 'Not yet generated' }] },
+  // The AI line keeps the `plan` storage key it had when this was a separate "Process plan" row, so
+  // plans already generated stay attached.
   { id: 'cam', name: 'CAM program', slots: [
-    { src: 'ai', pending: 'Not yet generated' },
+    { src: 'ai', key: 'plan', real: true, legacy: 'plan', pending: 'Not yet generated' },
     { src: 'human', legacy: 'cam', pending: 'Awaiting programmer', done: 'v1 · programmed in PowerMill' },
   ] },
   { id: 'balloon', name: 'Ballooned drawing', slots: [{ src: 'human', legacy: 'inspPlan', pending: 'Not yet uploaded', done: 'Balloons tagged' }] },
@@ -170,7 +170,7 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={onFileChosen} />
       <h2><Icon name="info" /> Documents for this {hasOrder ? 'order' : 'job'}</h2>
       <p className="page-sub" style={{ margin: '-8px 0 12px' }}>
-        Some documents are for the whole job, the rest are kept per part. "Human generated" lines take a file you upload. Of the "AI generated" lines only Process plan is connected so far — it runs the CAPP pipeline on the part's STEP file.
+        Some documents are for the whole job, the rest are kept per part. "Human generated" lines take a file you upload. Of the "AI generated" lines only CAM program is connected so far — it runs the CAPP pipeline on the part's STEP file.
       </p>
 
       <div className="doc-group-label">For the whole {hasOrder ? 'order' : 'job'}</div>
@@ -183,7 +183,7 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
         <div key={p.tmpl || p.name} data-part={p.name}>
           <div className="doc-part-head"><Icon name="part" size={15} /> {p.name} <span className="cell-sub">· part {i + 1} of {parts.length}</span></div>
           {PART_DOCS.map(d => d.slots.map((slot, si) => (
-            <Slot key={`${d.id}.${slot.src}`} name={d.name} slotKey={d.slots.length > 1 ? `p${i}.${d.id}.${slot.src}` : `p${i}.${d.id}`}
+            <Slot key={`${d.id}.${slot.src}`} name={d.name} slotKey={slot.key ? `p${i}.${slot.key}` : (d.slots.length > 1 ? `p${i}.${d.id}.${slot.src}` : `p${i}.${d.id}`)}
               slot={slot} partIndex={i} sub={si > 0} />
           )))}
           <OtherDocs scope={`p${i}`} hint="Specific to this part — material certificate and the like. Add as many as needed" />
