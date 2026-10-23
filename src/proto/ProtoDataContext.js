@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { LEGACY_JOB_STATUS } from './fixtures';
-import { call, fetchDocument, hasToken, login as apiLogin, logout as apiLogout, AuthError } from './api';
+import { call, fetchDocument, hasToken, openFlowSession, login as apiLogin, logout as apiLogout, AuthError } from './api';
 
 // All data lives in shiaanx-backend (the production-flow API, /api/v1/admin/flow), shared by everyone
 // on the team. This provider loads it once, keeps it fresh (after every change, and every 20 s while
@@ -65,6 +65,12 @@ export function ProtoDataProvider({ children }) {
   const busy = useRef(0);
 
   const onAuthLost = useCallback(() => { apiLogout(); setAuthed(false); setData(null); }, []);
+
+  // A token stored before the sx_session cookie existed, or whose cookie has expired, gets the
+  // cookie back once per load. Runs beside the bootstrap rather than ahead of it.
+  useEffect(() => {
+    if (hasToken()) openFlowSession().then(ok => { if (!ok) onAuthLost(); });
+  }, [onAuthLost]);
 
   const refresh = useCallback(async () => {
     try {

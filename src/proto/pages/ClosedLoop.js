@@ -4,6 +4,7 @@ import Icon from '../icons';
 import KpiStrip from '../components/KpiStrip';
 import { QcBadge, QcPillGroup, ConfidenceBadge } from '../components/Badges';
 import { CL_PARTS } from '../fixtures';
+import { openFlowSession } from '../api';
 
 const DEFAULT_PART = 'PN-1052';
 const LIST_STYLE = { margin: 0, paddingLeft: 20, fontSize: 13.5, display: 'flex', flexDirection: 'column', gap: 8 };
@@ -176,7 +177,9 @@ export default function ClosedLoop() {
   const [real, setReal] = useState(null); // null checking, true present, false absent
   useEffect(() => {
     let dead = false;
-    fetch(REPORT_URL, { method: 'HEAD' })
+    // nginx answers 401 when the sx_session cookie is missing or expired: renew it once and retry.
+    const head = () => fetch(REPORT_URL, { method: 'HEAD' });
+    head().then(r => (r.status === 401 ? openFlowSession().then(head) : r))
       .then(r => { if (!dead) setReal(r.ok && (r.headers.get('content-type') || '').includes('html')); })
       .catch(() => { if (!dead) setReal(false); });
     return () => { dead = true; };

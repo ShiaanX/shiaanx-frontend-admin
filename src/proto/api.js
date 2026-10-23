@@ -7,6 +7,22 @@ export class AuthError extends Error {}
 
 const token = () => { try { return localStorage.getItem('token'); } catch (e) { return null; } };
 
+// The pages served beside this app (3D QC view, closed-loop report) are let through by nginx only
+// with the HttpOnly sx_session cookie, which this sets from the token. False only when the server
+// rejects the token; a network/CORS error or a 404 (a backend without this route, or the API on
+// another origin in local work) is logged and let pass, so it never blocks the app itself.
+export async function openFlowSession(t = token()) {
+  if (!t) return false;
+  try {
+    const res = await fetch(`${API_BASE}/flow-session`, { method: 'POST', headers: { Authorization: `Bearer ${t}` }, credentials: 'include' });
+    if (res.status === 401 || res.status === 403) return false;
+    if (!res.ok) console.warn(`flow-session answered ${res.status}; the QC view and report may not load.`);
+  } catch (e) {
+    console.warn('flow-session could not be reached; the QC view and report may not load.', e);
+  }
+  return true;
+}
+
 export async function login(email, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }),
@@ -14,6 +30,7 @@ export async function login(email, password) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.data || !body.data.token) throw new Error(body.message || `Login failed (${res.status})`);
   if (body.data.user && body.data.user.role !== 'ADMIN') throw new Error('This account is not a team account.');
+  if (!(await openFlowSession(body.data.token))) throw new Error('Login failed: the server did not accept this session.');
   localStorage.setItem('token', body.data.token);
   localStorage.setItem('user', JSON.stringify(body.data.user));
   localStorage.setItem('isAuthenticated', 'true');
@@ -21,6 +38,7 @@ export async function login(email, password) {
 }
 
 export function logout() {
+  fetch(`${API_BASE}/flow-session`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
   ['token', 'user', 'isAuthenticated'].forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
 }
 
