@@ -170,7 +170,9 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
     </>
   );
 
-  const parts = row ? row.parts : [];
+  // Per-part documents are for parts being made, so a part left out when the enquiry was converted
+  // ("Not ordered") has none. Each keeps its index in row.parts, which the slot keys are built on.
+  const parts = (row ? row.parts : []).map((p, i) => ({ p, i })).filter(({ p }) => p.ordered !== false);
 
   return (
     <div className="card">
@@ -186,9 +188,9 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
       ))}
       <OtherDocs scope="job" hint="Common to the whole job — Certificate of Conformance and the like. Add as many as needed" />
 
-      {parts.map((p, i) => (
+      {parts.map(({ p, i }, n) => (
         <div key={p.tmpl || p.name} data-part={p.name}>
-          <div className="doc-part-head"><Icon name="part" size={15} /> {p.name} <span className="cell-sub">· part {i + 1} of {parts.length}</span></div>
+          <div className="doc-part-head"><Icon name="part" size={15} /> {p.name} <span className="cell-sub">· part {n + 1} of {parts.length}</span></div>
           {PART_DOCS.map(d => d.slots.map((slot, si) => (
             <Slot key={`${d.id}.${slot.src}`} name={d.name} slotKey={slot.key ? `p${i}.${slot.key}` : (d.slots.length > 1 ? `p${i}.${d.id}.${slot.src}` : `p${i}.${d.id}`)}
               slot={slot} partIndex={i} sub={si > 0}

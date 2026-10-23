@@ -3,22 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { JobStatusBadge } from './Badges';
 import DownloadLink from './DownloadLink';
+import ProcessChips from './ProcessChips';
 
 // Shared by order detail and a no-order (trial/internal) job — the production record looks
-// identical either way. Ported from the mockup's partsClosedLoopCard().
+// identical either way. Ported from the mockup's partsClosedLoopCard(). Only parts being made are
+// here: a part left out when the enquiry was converted ("Not ordered") has no production record.
 export default function ClosedLoopCard({ parts }) {
   const navigate = useNavigate();
+  const made = parts.filter(p => p.ordered !== false);
   return (
-    <div className="card">
+    <div className="card" data-closed-loop>
       <h2><Icon name="part" /> Closed-loop details — per piece</h2>
-      {parts.map((p) => (
-        <div className="part-row" key={p.name}>
+      {made.map((p) => (
+        <div className="part-row" key={p.name} data-cl-part={p.name}>
           <div className="part-row-head">
             <button type="button" className="btn-text" style={{ fontSize: 14.5 }} onClick={() => navigate(`/proto/parts/${p.tmpl}`)}>
               {p.name} <Icon name="part" size={14} />
             </button>
             <JobStatusBadge status={p.jobStatus} />
           </div>
+          <ProcessChips processes={p.processes} style={{ marginBottom: 10 }} />
           <div className="mini-grid">
             <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
             <div><span className="ml">Quantity</span><span className="mv">{p.qty}</span></div>

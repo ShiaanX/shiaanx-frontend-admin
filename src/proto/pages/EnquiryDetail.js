@@ -8,23 +8,75 @@ import AutoQuoteModal from '../components/AutoQuoteModal';
 import UpdateEnquiryModal from '../components/UpdateEnquiryModal';
 import DocumentsReceived from '../components/DocumentsReceived';
 import EditableEnquiryNumber from '../components/EditableEnquiryNumber';
+import PartPickerModal from '../components/PartPickerModal';
+import ProcessChips, { NotOrderedBadge } from '../components/ProcessChips';
+import RepeatLinks from '../components/RepeatLinks';
+import ComplaintsCard from '../components/ComplaintsCard';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
-function TrialJobDetail({ r }) {
+// Convert to order: pick which parts the customer confirmed. The rest stay on the job as "Not
+// ordered" and can be added to the order later from the order page.
+function ConvertModal({ r, onClose }) {
   const navigate = useNavigate();
   const { convertToOrder } = useProtoData();
-  const linkToOrder = () => convertToOrder(r.uuid).then(id => navigate(`/proto/orders/${id}`)).catch(() => {});
+  return (
+    <PartPickerModal
+      title={`Convert ${r.id} to an order`}
+      intro="Tick the parts the customer has ordered. Parts left unticked stay on this job marked “Not ordered”, and can be added to the order later."
+      parts={r.parts}
+      confirmLabel="Convert to order"
+      busyLabel="Converting…"
+      onClose={onClose}
+      onConfirm={(partIds) => convertToOrder(r.uuid, partIds).then(uid => navigate(`/proto/orders/${uid}`))}
+    />
+  );
+}
+
+// Every manual quote uploaded before the current one, newest first — replacing a quote keeps the old.
+function ManualQuoteHistory({ r }) {
+  const { openFile, downloadFile } = useProtoData();
+  const [open, setOpen] = useState(false);
+  const earlier = (r.manualQuotes || []).filter(q => !q.current && q.fileKey !== r.manualQuoteFileKey);
+  if (earlier.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8 }} data-quote-history>
+      <button type="button" className="btn-text" onClick={() => setOpen(o => !o)} data-quote-history-toggle>
+        {open ? 'Hide' : 'Earlier quotes'} ({earlier.length})
+      </button>
+      {open && earlier.map(q => (
+        <div className="doc-row" key={q.fileKey} data-earlier-quote>
+          <div className="doc-icon"><Icon name="doc" /></div>
+          <div>
+            <div className="doc-name">{q.name}</div>
+            <div className="doc-sub">{q.at ? `Uploaded ${fmtDate(String(q.at).slice(0, 10))}` : 'Earlier quote'}</div>
+          </div>
+          <div className="doc-actions">
+            <button type="button" className="btn-text" onClick={() => openFile(q.fileKey)}>View</button>
+            <button type="button" className="btn-text" onClick={() => downloadFile(q.fileKey)}>Download</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrialJobDetail({ r }) {
+  const navigate = useNavigate();
   const [showUpdate, setShowUpdate] = useState(false);
+  const [showConvert, setShowConvert] = useState(false);
   return (
     <div>
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
       <div className="detail-head">
-        <div className="detail-title"><EditableEnquiryNumber row={r} /><StatusBadge status={r.status} /><span className="badge b-neutral">NO CUSTOMER ORDER</span></div>
+        <div>
+          <div className="detail-title"><EditableEnquiryNumber row={r} /><StatusBadge status={r.status} /><span className="badge b-neutral">NO CUSTOMER ORDER</span></div>
+          <RepeatLinks row={r} />
+        </div>
         <div className="head-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
-          <button type="button" className="btn px-btn-primary" onClick={linkToOrder}>Link to a customer order</button>
+          <button type="button" className="btn px-btn-primary" onClick={() => setShowConvert(true)}>Link to a customer order</button>
         </div>
       </div>
       <div className="stub-note">
@@ -39,6 +91,7 @@ function TrialJobDetail({ r }) {
           </div>
           <ClosedLoopCard parts={r.parts} />
           <ArtifactChecklist jobId={r.id} row={r} hasOrder={false} />
+          <ComplaintsCard row={r} />
         </div>
         <div>
           <DocumentsReceived row={r} />
@@ -54,6 +107,7 @@ function TrialJobDetail({ r }) {
         </div>
       </div>
       {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
+      {showConvert && <ConvertModal r={r} onClose={() => setShowConvert(false)} />}
     </div>
   );
 }
@@ -61,10 +115,11 @@ function TrialJobDetail({ r }) {
 export default function EnquiryDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { findRow, convertToOrder, markNoOrderJob, uploadManualQuote } = useProtoData();
+  const { findRow, markNoOrderJob, uploadManualQuote } = useProtoData();
   const r = findRow(id);
   const [quotingPart, setQuotingPart] = useState(null); // part index, or null
   const [showUpdate, setShowUpdate] = useState(false);
+  const [showConvert, setShowConvert] = useState(false);
   const manualQuoteInput = useRef(null);
 
   // Once converted this id belongs under /orders/:orderId — if something still links to the old
@@ -77,7 +132,6 @@ export default function EnquiryDetail() {
   if (r.isOrder) return null;
   if (r.jobType === 'TRIAL') return <TrialJobDetail r={r} />;
 
-  const convert = () => convertToOrder(r.uuid).then(uid => navigate(`/proto/orders/${uid}`)).catch(() => {});
   const onManualQuoteChosen = (e) => {
     const file = e.target.files[0];
     e.target.value = '';
@@ -91,11 +145,12 @@ export default function EnquiryDetail() {
         <div>
           <div className="detail-title"><EditableEnquiryNumber row={r} /><StatusBadge status={r.status} /></div>
           {r.assemblyName && <div className="page-sub" style={{ marginTop: 2 }}>{r.assemblyName}</div>}
+          <RepeatLinks row={r} />
         </div>
         <div className="head-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost" onClick={() => markNoOrderJob(r.uuid).catch(() => {})}>Produce without a confirmed order</button>
-          <button type="button" className="btn px-btn-primary" onClick={convert}>Convert to order</button>
+          <button type="button" className="btn px-btn-primary" onClick={() => setShowConvert(true)}>Convert to order</button>
         </div>
       </div>
       <div className="grid2">
@@ -115,6 +170,7 @@ export default function EnquiryDetail() {
               <button type="button" className="btn-text" onClick={() => manualQuoteInput.current.click()}>
                 <Icon name="upload" size={14} /> {r.manualQuoteFileKey ? `Replace manual quote (${r.manualQuoteFileName})` : 'Upload a manual quote (Excel/PDF) instead'}
               </button>
+              <ManualQuoteHistory r={r} />
             </div>
           </div>
           <div className="card">
@@ -122,9 +178,10 @@ export default function EnquiryDetail() {
             {r.parts.map((p, i) => (
               <div className="part-row" key={p.tmpl || p.name}>
                 <div className="part-row-head">
-                  <span className="name">{p.name}</span>
+                  <span className="name" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{p.name} <NotOrderedBadge part={p} /></span>
                   <button type="button" className="btn-text" onClick={() => setQuotingPart(i)}><Icon name="quote" size={14} /> Auto-quote</button>
                 </div>
+                <ProcessChips processes={p.processes} style={{ marginBottom: 10 }} />
                 <div className="mini-grid">
                   <div><span className="ml">Material</span><span className="mv">{p.material}</span></div>
                   <div><span className="ml">Quantity</span><span className="mv">{p.qty}</span></div>
@@ -148,6 +205,7 @@ export default function EnquiryDetail() {
       </div>
       {quotingPart !== null && <AutoQuoteModal row={r} partIndex={quotingPart} onClose={() => setQuotingPart(null)} />}
       {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
+      {showConvert && <ConvertModal r={r} onClose={() => setShowConvert(false)} />}
     </div>
   );
 }

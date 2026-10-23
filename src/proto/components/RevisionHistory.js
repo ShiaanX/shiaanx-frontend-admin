@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useProtoData } from '../ProtoDataContext';
+import { isStepFile, view3dPath } from './docLinks';
 import { fmtDate } from '../utils';
 
 // Every earlier version of a part — qty, material, finish, CAD file, drawing, remarks — oldest
 // first as superseded, never deleted, only appended to by UpdateEnquiryModal. Collapsed by default
-// since most parts have none.
+// since most parts have none. An earlier STEP file opens in the 3D view as well as downloading.
 export default function RevisionHistory({ part }) {
+  const navigate = useNavigate();
   const { openFile, downloadFile } = useProtoData();
   const [open, setOpen] = useState(false);
   const revisions = part.revisions || [];
@@ -27,7 +30,15 @@ export default function RevisionHistory({ part }) {
                 <div><span className="ml">Finish</span><span className="mv">{rv.finish}</span></div>
                 <div>
                   <span className="ml">CAD file</span>
-                  <span className="mv">{rv.fileKey ? (<><button type="button" className="btn-text" onClick={() => downloadFile(rv.fileKey)}>{rv.file}</button></>) : '—'}</span>
+                  <span className="mv">
+                    {rv.fileKey ? (
+                      <>
+                        {rv.file}{' '}
+                        {(isStepFile(rv.file) || !rv.file) && <><button type="button" className="btn-text" onClick={() => navigate(view3dPath(rv.fileKey))} data-rev-view3d>View 3D</button>{' '}</>}
+                        <button type="button" className="btn-text" onClick={() => downloadFile(rv.fileKey)}>Download</button>
+                      </>
+                    ) : '—'}
+                  </span>
                 </div>
                 <div>
                   <span className="ml">Drawing</span>
