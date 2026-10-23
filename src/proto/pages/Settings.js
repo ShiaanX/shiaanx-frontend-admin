@@ -88,7 +88,7 @@ function EditableTable({ title, addLabel, columns, items, onSave, onRemove, remo
 
 export default function Settings() {
   const { settings, saveSetting, removeSetting } = useProtoData();
-  const table = (kind) => ({ items: settings[kind], onSave: (id, values) => saveSetting(kind, id, values), onRemove: (id) => removeSetting(kind, id) });
+  const table = (kind) => ({ items: settings[kind] || [], onSave: (id, values) => saveSetting(kind, id, values), onRemove: (id) => removeSetting(kind, id) });
   return (
     <div>
       <div className="page-head"><div><h1>Settings</h1><div className="page-sub">The lists the rest of the app draws on. Customers live under Sales.</div></div></div>
@@ -104,6 +104,10 @@ export default function Settings() {
 
       <EditableTable title="Materials & finishes" addLabel="Add material" {...table('materials')}
         columns={[{ key: 'name', label: 'Material', placeholder: 'e.g. Aluminium 6082' }, { key: 'rate', label: 'Rate (₹/kg)', placeholder: '450', mono: true }, { key: 'finishes', label: 'Finishes available', placeholder: 'As machined, Anodised' }]} />
+
+      <EditableTable title="Processes" addLabel="Add process" {...table('processes')}
+        columns={[{ key: 'name', label: 'Process', placeholder: 'e.g. CNC turning' }]} />
+      <p className="cell-sub" style={{ marginTop: 8 }}>The processes a part can need (a part can need several). Picked per part on New enquiry and Update; Enquiries and CAM Programs filter by them.</p>
 
       <EditableTable title="Tool catalogue" addLabel="Add tool" {...table('tools')}
         columns={[{ key: 'code', label: 'Tool code', placeholder: 'e.g. EM_2FL_8MM' }, { key: 'type', label: 'Type', placeholder: 'End mill, 2-flute' }, { key: 'diameter', label: 'Diameter', placeholder: '8 mm' }]} />

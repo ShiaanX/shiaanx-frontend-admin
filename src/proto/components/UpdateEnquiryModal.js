@@ -3,15 +3,20 @@ import Icon from '../icons';
 import Modal from './Modal';
 import Dropzone from './Dropzone';
 import EditableSelect from './EditableSelect';
+import ProcessPicker from './ProcessPicker';
 import { useProtoData } from '../ProtoDataContext';
+
+const onFile = (list) => (list && list.length ? ` — ${list.length} already on file` : '');
 
 const existingPartForm = (p, i) => ({
   key: `existing-${i}`, existing: true, originalIndex: i,
-  partName: p.name, qty: p.qty, material: p.material, finish: p.finish, cadFile: null, drawingFile: null,
+  partName: p.name, qty: p.qty, material: p.material, finish: p.finish, processes: [...(p.processes || [])],
+  cadFile: null, drawingFile: null, receivedFiles: [],
 });
 const newPartForm = () => ({
   key: Math.random().toString(36).slice(2), existing: false,
-  partName: '', qty: 1, material: 'Aluminium 6061', finish: 'As machined', cadFile: null, drawingFile: null,
+  partName: '', qty: 1, material: 'Aluminium 6061', finish: 'As machined', processes: [],
+  cadFile: null, drawingFile: null, receivedFiles: [],
 });
 
 // The same form as New Enquiry, pre-filled with this enquiry's current values — for when the
@@ -20,8 +25,9 @@ const newPartForm = () => ({
 // current qty/material/finish/CAD/drawing it's replacing is kept in that part's revision history
 // (ProtoDataContext.applyEnquiryUpdate).
 export default function UpdateEnquiryModal({ row, onClose }) {
-  const { materials, finishes, addMaterial, addFinish, applyEnquiryUpdate } = useProtoData();
+  const { materials, finishes, addMaterial, addFinish, processes, addProcess, applyEnquiryUpdate } = useProtoData();
   const [parts, setParts] = useState(row.parts.map(existingPartForm));
+  const [receivedFiles, setReceivedFiles] = useState([]);
   const [assemblyName, setAssemblyName] = useState(row.assemblyName || '');
   const [remarks, setRemarks] = useState(row.remarks || '');
   const [note, setNote] = useState('');
@@ -45,7 +51,7 @@ export default function UpdateEnquiryModal({ row, onClose }) {
     setSaving(true);
     setError('');
     try {
-      await applyEnquiryUpdate(row, { remarks, assemblyName, parts, note });
+      await applyEnquiryUpdate(row, { remarks, assemblyName, parts, note, receivedFiles });
       onClose();
     } catch (e) {
       console.error('Update failed:', e);
@@ -94,6 +100,7 @@ export default function UpdateEnquiryModal({ row, onClose }) {
               <EditableSelect label="Material" options={materials} value={p.material} onChange={(v) => updatePart(p.key, { material: v })} onAdd={addMaterial} placeholder="e.g. Titanium Grade 5" />
             </div>
             <EditableSelect label="Finish" options={finishes} value={p.finish} onChange={(v) => updatePart(p.key, { finish: v })} onAdd={addFinish} placeholder="e.g. Chromate conversion" />
+            <ProcessPicker options={processes || []} value={p.processes} onChange={(v) => updatePart(p.key, { processes: v })} onAdd={addProcess} />
             <Dropzone
               label={`CAD file (.step/.stp)${p.existing && row.parts[p.originalIndex].fileKey ? ` — current: ${row.parts[p.originalIndex].file}` : ''}`}
               accept=".step,.stp" file={p.cadFile} onChange={(f) => updatePart(p.key, { cadFile: f })}
@@ -102,11 +109,21 @@ export default function UpdateEnquiryModal({ row, onClose }) {
               label={`Drawing (.pdf)${p.existing && row.parts[p.originalIndex].drawingFileKey ? ` — current: ${row.parts[p.originalIndex].drawingFileName}` : ''}`}
               accept=".pdf" file={p.drawingFile} onChange={(f) => updatePart(p.key, { drawingFile: f })}
             />
+            <Dropzone
+              multiple files={p.receivedFiles} onChange={(fs) => updatePart(p.key, { receivedFiles: fs })}
+              label={`Other documents (any number)${onFile(p.existing ? row.parts[p.originalIndex].received : null)}`}
+              hint="added alongside what's already there"
+            />
           </div>
         ))}
         <button type="button" className="btn btn-ghost" onClick={addPart}><Icon name="plus" /> Add another part type</button>
       </div>
 
+      <Dropzone
+        multiple files={receivedFiles} onChange={setReceivedFiles}
+        label={`Project documents (any number)${onFile(row.received)}`}
+        hint="for the whole job, not one part"
+      />
       <div className="field"><label>Remarks</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Anything the team should know about this enquiry…" /></div>
       <div className="field"><label>What changed (optional note)</label><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Client sent Rev B drawings and dropped Part B's quantity to 3" /></div>
       {showErrors && parts.some(missingName) && <p className="field-error" style={{ margin: 0 }}>Not saved yet — the fields marked in red above are missing.</p>}
