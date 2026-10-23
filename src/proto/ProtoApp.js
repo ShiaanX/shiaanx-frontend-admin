@@ -14,12 +14,15 @@ import CamPrograms from './pages/CamPrograms';
 import ClosedLoop from './pages/ClosedLoop';
 import Inspection from './pages/Inspection';
 import Settings from './pages/Settings';
+import View3D from './pages/View3D';
+import Complaints from './pages/Complaints';
 
 const NAV = [
   { to: '/proto', end: true, icon: 'base', label: 'Enquiries & Orders', crumb: 'Sales / Enquiries & Orders' },
   { to: '/proto/board', icon: 'board', label: 'Production Board', crumb: 'Production / Production Board' },
   { to: '/proto/cam', icon: 'cam', label: 'CAM Programs', crumb: 'Production / CAM Programs' },
   { to: '/proto/closed-loop', icon: 'knowledge', label: 'Closed Loop', crumb: 'Production / Closed Loop' },
+  { to: '/proto/complaints', icon: 'quality', label: 'Complaints & Feedback', crumb: 'Quality / Complaints & Feedback' },
   { to: '/proto/settings', icon: 'settings', label: 'Settings', crumb: 'Admin / Settings' },
 ];
 
@@ -27,6 +30,7 @@ function crumbFor(pathname) {
   if (pathname.startsWith('/proto/customers')) return 'Sales / Customers';
   if (pathname.startsWith('/proto/parts')) return 'Enquiries & Orders / CAM program';
   if (pathname.startsWith('/proto/inspection')) return 'Enquiries & Orders / Inspection report';
+  if (pathname.startsWith('/proto/view3d')) return 'Enquiries & Orders / 3D view';
   if (pathname.startsWith('/proto/orders') || pathname.startsWith('/proto/enquiries')) return 'Sales / Enquiries & Orders';
   const hit = NAV.slice().reverse().find(n => pathname.startsWith(n.to) && (n.to !== '/proto' || pathname === '/proto'));
   return hit ? hit.crumb : 'Sales / Enquiries & Orders';
@@ -134,6 +138,8 @@ export default function ProtoApp() {
           <Route path="closed-loop/:partId" element={<ClosedLoop />} />
           <Route path="inspection/:part" element={<Inspection />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="view3d/:fileKey" element={<View3D />} />
+          <Route path="complaints" element={<Complaints />} />
         </Routes>
       </Shell>
       </Gate>
