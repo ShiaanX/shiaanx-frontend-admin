@@ -118,7 +118,7 @@ export default function NewEnquiryModal({ onClose }) {
   };
 
   const requestClose = async () => {
-    if (formHasContent(formRef.current) && !window.confirm('Discard this enquiry? Your draft is kept.')) return;
+    if (formHasContent(formRef.current) && !window.confirm('Close this enquiry? Your draft is kept, and opens again next time.')) return;
     clearTimeout(timer.current);
     if (draftReady) await writeDraft();
     finished.current = true;
