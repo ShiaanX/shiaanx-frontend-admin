@@ -4,10 +4,11 @@ import Icon from '../icons';
 import { StatusBadge } from '../components/Badges';
 import NewEnquiryModal from '../components/NewEnquiryModal';
 import { useProtoData } from '../ProtoDataContext';
-import { TODAY } from '../fixtures';
 import { fmtDate } from '../utils';
 
 const PERIOD_LABELS = { 7: 'Last 7 days', 30: 'Last 30 days', 90: 'This quarter', fy: 'This financial year', all: 'All time', custom: 'Custom range' };
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function fyRange(d) {
   // Indian FY: 1 Apr – 31 Mar.
@@ -17,26 +18,30 @@ function fyRange(d) {
 
 export default function EnquiriesOrders() {
   const { rows } = useProtoData();
+  const today = useMemo(() => new Date(), []);
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all');
   const [period, setPeriod] = useState('30');
-  const [customFrom, setCustomFrom] = useState('2026-09-01');
-  const [customTo, setCustomTo] = useState('2026-10-05');
+  const [customFrom, setCustomFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return ymd(d); });
+  const [customTo, setCustomTo] = useState(() => ymd(new Date()));
   const [showNewEnquiry, setShowNewEnquiry] = useState(false);
 
+  // The period scopes both the stats and the list, by the date the enquiry came in (r.date,
+  // YYYY-MM-DD). A row with no date is kept rather than silently hidden.
   const scoped = useMemo(() => {
     if (period === 'all') return rows;
-    if (period === 'fy') { const { from, to } = fyRange(TODAY); return rows.filter(r => r.date >= from && r.date <= to); }
-    if (period === 'custom') return rows.filter(r => r.date >= customFrom && r.date <= customTo);
-    const cutoff = new Date(TODAY); cutoff.setDate(cutoff.getDate() - parseInt(period, 10));
-    return rows.filter(r => new Date(r.date) >= cutoff);
-  }, [rows, period, customFrom, customTo]);
+    let from; let to = ymd(today);
+    if (period === 'fy') ({ from, to } = fyRange(today));
+    else if (period === 'custom') { from = customFrom; to = customTo; }
+    else { const d = new Date(today); d.setDate(d.getDate() - parseInt(period, 10)); from = ymd(d); }
+    return rows.filter(r => !r.date || (r.date >= from && r.date <= to));
+  }, [rows, period, customFrom, customTo, today]);
 
   const filtered = useMemo(() => {
-    if (filter === 'orders') return rows.filter(r => r.isOrder);
-    if (filter === 'enq') return rows.filter(r => !r.isOrder);
-    return rows;
-  }, [rows, filter]);
+    if (filter === 'orders') return scoped.filter(r => r.isOrder);
+    if (filter === 'enq') return scoped.filter(r => !r.isOrder);
+    return scoped;
+  }, [scoped, filter]);
 
   const stats = {
     total: scoped.length,
@@ -58,7 +63,7 @@ export default function EnquiriesOrders() {
       </div>
 
       <div className="period-ctrl">
-        <Icon name="calendar" /><span className="period-label">Stats below for</span>
+        <Icon name="calendar" /><span className="period-label">Showing</span>
         <select value={period} onChange={e => setPeriod(e.target.value)}>
           {Object.entries(PERIOD_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
@@ -69,7 +74,7 @@ export default function EnquiriesOrders() {
             <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} />
           </span>
         )}
-        {period === 'fy' && <span className="period-label mono">{fyRange(TODAY).label} · {fmtDate(fyRange(TODAY).from)} – {fmtDate(fyRange(TODAY).to)}</span>}
+        {period === 'fy' && <span className="period-label mono">{fyRange(today).label} · {fmtDate(fyRange(today).from)} – {fmtDate(fyRange(today).to)}</span>}
       </div>
 
       <div className="stats-row">
@@ -92,7 +97,7 @@ export default function EnquiriesOrders() {
         <table className="data">
           <thead><tr><th>Enquiry #</th><th>Customer</th><th>Parts</th><th>Status</th><th>Order?</th><th /></tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={6}><div className="empty-hint">No rows match this filter.</div></td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={6}><div className="empty-hint">No enquiries in this period match this filter.</div></td></tr>}
             {filtered.map(r => (
               <tr key={r.id} className="rowlink" onClick={() => openRow(r)}>
                 <td className="mono cell-primary">{r.id}{r.isOrder && <div className="cell-sub mono">{r.orderId}</div>}</td>
