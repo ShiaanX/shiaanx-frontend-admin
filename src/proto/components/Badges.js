@@ -9,7 +9,7 @@ export function StatusBadge({ status }) {
   return <span className={`badge ${STATUS_CLS[status] || 'b-neutral'}`}>{status.replace('_', ' ')}</span>;
 }
 
-const JOB_STATUS_CLS = { IN_QUEUE: 'b-neutral', PROCESS_PLANNING: 'b-quoted', SCHEDULING: 'b-quoted', PRODUCTION: 'b-inprogress', QC: 'b-near', DISPATCHED: 'b-done' };
+const JOB_STATUS_CLS = { IN_QUEUE: 'b-neutral', PROCESS_PLANNING: 'b-quoted', SCHEDULING: 'b-quoted', PRODUCTION: 'b-inprogress', QC: 'b-near', DISPATCHED: 'b-done', DELIVERED: 'b-done' };
 export function JobStatusBadge({ status }) {
   return <span className={`badge ${JOB_STATUS_CLS[status] || 'b-neutral'}`}>{JOB_STATUS_LABEL[status] || status}</span>;
 }

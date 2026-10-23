@@ -7,7 +7,8 @@ import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
 // derived from the same rows as the list (so the two cannot drift apart) and can be dragged between
 // columns — the drop updates that part's jobStatus everywhere it's shown, via
 // ProtoDataContext.setPartStatus. Partner-shop cards aren't backed by a row yet, so they're
-// view-only for now.
+// view-only for now. Delivered is past the last column: a part the customer has received leaves the
+// board, marked from its Dispatched card or for the whole order on the order page.
 export default function ProductionBoard() {
   const { rows, setPartStatus } = useProtoData();
   const navigate = useNavigate();
@@ -16,10 +17,10 @@ export default function ProductionBoard() {
 
   const jobs = [];
   rows.forEach(r => r.parts.forEach((p, idx) => {
-    if (!p.jobStatus) return;
+    if (!p.jobStatus || p.jobStatus === 'DELIVERED') return;
     jobs.push({
       id: `${r.id}:${idx}`, rowId: r.id, partIndex: idx, draggable: true,
-      n: `${p.name} #1`, m: r.customer, tag: 'inhouse', tl: p.machine || '—', status: p.jobStatus,
+      n: `${p.name} #1`, partName: p.name, job: r.isOrder ? r.orderId : r.id, m: r.customer, tag: 'inhouse', tl: p.machine || '—', status: p.jobStatus,
       to: r.isOrder ? `/proto/orders/${r.uuid}` : `/proto/enquiries/${r.uuid}`,
     });
   }));
@@ -33,9 +34,16 @@ export default function ProductionBoard() {
     setPartStatus(job.rowId, job.partIndex, status);
   };
 
+  // Stops the click there, or the card would also open its order.
+  const markDelivered = (e, job) => {
+    e.stopPropagation();
+    if (!window.confirm(`Mark ${job.partName} on ${job.job} as delivered? It leaves the Production Board.`)) return;
+    setPartStatus(job.rowId, job.partIndex, 'DELIVERED');
+  };
+
   return (
     <div>
-      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every part in an order or a job being produced, by stage. A new order starts in the queue. Drag a card to change its stage.</div></div></div>
+      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every part in an order or a job being produced, by stage. A new order starts in the queue. Drag a card to change its stage. Once the customer has a part, mark it delivered (on its Dispatched card, or for the whole order on the order page) and it leaves the board.</div></div></div>
       <div className="board">
         {JOB_STATUSES.map(status => {
           const col = jobs.filter(j => j.status === status);
@@ -62,6 +70,9 @@ export default function ProductionBoard() {
                     <div className="jn">{j.n}</div>
                     <div className="jm">{j.m}</div>
                     <div className="jt"><span className={`tag ${j.tag}`}>{j.tag === 'inhouse' ? 'In-house' : 'Partner'}</span><span className="tag">{j.tl}</span></div>
+                    {j.status === 'DISPATCHED' && (
+                      <button type="button" className="btn-sm ghost" style={{ marginTop: 8 }} onClick={(e) => markDelivered(e, j)}>Mark delivered</button>
+                    )}
                   </div>
                 ))}
               </div>

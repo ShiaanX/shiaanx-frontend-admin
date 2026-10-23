@@ -175,6 +175,9 @@ export function ProtoDataProvider({ children }) {
   const convertToOrder = async (id) => { const r = findRow(id); await run(() => call('POST', `/enquiries/${r.uuid}/convert`)); return r.uuid; };
   const revertToEnquiry = async (row) => { await run(() => call('POST', `/enquiries/${row.uuid}/revert`)); return row.uuid; };
   const markNoOrderJob = (id) => { const r = findRow(id); return run(() => call('POST', `/enquiries/${r.uuid}/no-order`)); };
+  // The customer has the order: every part goes to Delivered (and off the board) and the delivery
+  // date is stamped. `false` undoes it — the parts go back to Dispatched and the date is cleared.
+  const markDelivered = (row, delivered) => run(() => call('POST', `/enquiries/${row.uuid}/delivered`, { json: { delivered: !!delivered } }));
 
   // ── quotes ──
   const getAutoQuote = (rowId, partIndex) => { const r = findRow(rowId); return (r && r.parts[partIndex] && r.parts[partIndex].autoQuote) || null; };
@@ -329,7 +332,7 @@ export function ProtoDataProvider({ children }) {
     materials, finishes, addMaterial, addFinish,
     findRow,
     findOrder: (id) => rows.find(r => r.isOrder && (r.uuid === id || r.orderId === id)),
-    addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob,
+    addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, markDelivered,
     patchEnquiry, setPartStatus, applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
     settings, saveSetting, removeSetting, patchPartLibrary,

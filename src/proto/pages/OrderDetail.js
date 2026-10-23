@@ -8,13 +8,13 @@ import DocumentsReceived from '../components/DocumentsReceived';
 import UpdateEnquiryModal from '../components/UpdateEnquiryModal';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
-import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
+import { ORDER_STAGES, JOB_STATUS_LABEL } from '../fixtures';
 
 
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const { findOrder, revertToEnquiry, patchEnquiry } = useProtoData();
+  const { findOrder, revertToEnquiry, patchEnquiry, markDelivered } = useProtoData();
   const r = findOrder(orderId);
   const [showUpdate, setShowUpdate] = useState(false);
   if (!r) return <div className="empty-hint">Order not found.</div>;
@@ -22,8 +22,24 @@ export default function OrderDetail() {
     if (!window.confirm(`Turn ${r.orderId} back into enquiry ${r.id}? Nothing uploaded is deleted, and converting again later brings this order back.`)) return;
     revertToEnquiry(r).then(id => navigate(`/proto/enquiries/${id}`)).catch(() => {});
   };
-  // Same statuses as the Production Board; an order sits at the stage of its least-advanced piece.
-  const stage = Math.min(...r.parts.map(p => JOB_STATUSES.indexOf(p.jobStatus)));
+  // The Production Board's statuses plus Delivered; an order sits at the stage of its least-advanced
+  // piece. Delivered is the server's call (r.status), made when every piece has been delivered.
+  const delivered = r.status === 'DELIVERED';
+  const stage = delivered ? ORDER_STAGES.length - 1 : Math.min(...r.parts.map(p => ORDER_STAGES.indexOf(p.jobStatus)));
+  const stepDetail = (s, i) => {
+    if (s === 'DELIVERED') return delivered ? (r.deliveredDate ? `Delivered · ${fmtDate(r.deliveredDate)}` : 'Done') : 'Pending';
+    if (i > stage) return 'Pending';
+    return i < stage || delivered || s === 'DISPATCHED' ? 'Done' : 'In progress';
+  };
+  // Every piece has left the shop, so the customer can be recorded as having the order.
+  const allShipped = r.parts.length > 0 && r.parts.every(p => p.jobStatus === 'DISPATCHED' || p.jobStatus === 'DELIVERED');
+  const setDelivered = (on) => {
+    const msg = on
+      ? `Mark ${r.orderId} as delivered? Every part leaves the Production Board and today is recorded as the delivery date.`
+      : `Undo delivery of ${r.orderId}? Its parts go back to Dispatched on the Production Board and the delivery date is cleared.`;
+    if (!window.confirm(msg)) return;
+    markDelivered(r, on).catch(() => {});
+  };
 
   return (
     <div>
@@ -31,6 +47,10 @@ export default function OrderDetail() {
       <div className="detail-head">
         <div className="detail-title"><h1>{r.orderId}</h1><StatusBadge status={r.status} /></div>
         <div className="head-actions">
+          {allShipped && !delivered && (
+            <button type="button" className="btn px-btn-primary" onClick={() => setDelivered(true)}><Icon name="quality" size={14} /> Mark as delivered</button>
+          )}
+          {delivered && <button type="button" className="btn btn-ghost" onClick={() => setDelivered(false)}><Icon name="back" size={14} /> Undo delivered</button>}
           <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost" onClick={revert}><Icon name="back" size={14} /> Revert to enquiry</button>
           <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
@@ -62,10 +82,10 @@ export default function OrderDetail() {
             <h2>Status history</h2>
             <div className="timeline">
               <div className="tl-item"><div className="tl-t">Order placed</div><div className="tl-d">{fmtDate(r.orderDate)}</div></div>
-              {JOB_STATUSES.map((s, i) => (
-                <div key={s} className={`tl-item ${i > stage ? 'future' : ''}`}>
+              {ORDER_STAGES.map((s, i) => (
+                <div key={s} className={`tl-item ${i > stage || (s === 'DELIVERED' && !delivered) ? 'future' : ''}`}>
                   <div className="tl-t">{JOB_STATUS_LABEL[s]}</div>
-                  <div className="tl-d">{i > stage ? 'Pending' : i < stage || s === 'DISPATCHED' ? 'Done' : 'In progress'}</div>
+                  <div className="tl-d">{stepDetail(s, i)}</div>
                 </div>
               ))}
             </div>

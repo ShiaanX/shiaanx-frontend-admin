@@ -4,11 +4,14 @@
 
 export const TODAY = new Date('2026-10-05');
 
-// Shared by the Production Board columns and each order's status timeline.
+// The Production Board's columns.
 export const JOB_STATUSES = ['IN_QUEUE', 'PROCESS_PLANNING', 'SCHEDULING', 'PRODUCTION', 'QC', 'DISPATCHED'];
+// An order's status timeline: the board's stages, then Delivered — marked once the customer has the
+// parts, at which point they leave the board.
+export const ORDER_STAGES = [...JOB_STATUSES, 'DELIVERED'];
 export const JOB_STATUS_LABEL = {
   IN_QUEUE: 'In queue', PROCESS_PLANNING: 'Process planning', SCHEDULING: 'Scheduling',
-  PRODUCTION: 'Production', QC: 'QC', DISPATCHED: 'Dispatched',
+  PRODUCTION: 'Production', QC: 'QC', DISPATCHED: 'Dispatched', DELIVERED: 'Delivered',
 };
 // Statuses saved in a browser before the board's stages were renamed.
 export const LEGACY_JOB_STATUS = { PLANNED: 'PROCESS_PLANNING', SCHEDULED: 'SCHEDULING', MACHINING: 'PRODUCTION' };
