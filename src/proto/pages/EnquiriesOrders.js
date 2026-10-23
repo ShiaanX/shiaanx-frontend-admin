@@ -21,6 +21,7 @@ export default function EnquiriesOrders() {
   const today = useMemo(() => new Date(), []);
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
   const [period, setPeriod] = useState('30');
   const [customFrom, setCustomFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return ymd(d); });
   const [customTo, setCustomTo] = useState(() => ymd(new Date()));
@@ -37,11 +38,20 @@ export default function EnquiriesOrders() {
     return rows.filter(r => !r.date || (r.date >= from && r.date <= to));
   }, [rows, period, customFrom, customTo, today]);
 
+  // Search matches enquiry #, order #, customer, assembly name and part names; every word typed
+  // must appear somewhere in the row, in any order, ignoring case.
   const filtered = useMemo(() => {
-    if (filter === 'orders') return scoped.filter(r => r.isOrder);
-    if (filter === 'enq') return scoped.filter(r => !r.isOrder);
-    return scoped;
-  }, [scoped, filter]);
+    let list = scoped;
+    if (filter === 'orders') list = list.filter(r => r.isOrder);
+    if (filter === 'enq') list = list.filter(r => !r.isOrder);
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return list;
+    return list.filter(r => {
+      const hay = [r.id, r.orderId, r.customer, r.assemblyName, ...(r.parts || []).map(p => p.name)]
+        .filter(Boolean).join(' ').toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
+  }, [scoped, filter, query]);
 
   const stats = {
     total: scoped.length,
@@ -85,7 +95,7 @@ export default function EnquiriesOrders() {
       </div>
 
       <div className="toolbar">
-        <div className="search"><Icon name="search" /><input placeholder="Search enquiry #, customer, part…" /></div>
+        <div className="search"><Icon name="search" /><input placeholder="Search enquiry #, customer, part…" value={query} onChange={e => setQuery(e.target.value)} /></div>
         <div className="filter-pills">
           <div className={`pill ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</div>
           <div className={`pill ${filter === 'orders' ? 'active' : ''}`} onClick={() => setFilter('orders')}>Orders only</div>
