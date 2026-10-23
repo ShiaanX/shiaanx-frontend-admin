@@ -45,7 +45,7 @@ export default function EnquiriesOrders() {
     inProduction: scoped.filter(r => r.status === 'IN_PRODUCTION').length,
   };
 
-  const openRow = (r) => navigate(r.isOrder ? `/proto/orders/${r.orderId}` : `/proto/enquiries/${r.id}`);
+  const openRow = (r) => navigate(r.isOrder ? `/proto/orders/${r.uuid}` : `/proto/enquiries/${r.uuid}`);
 
   return (
     <div>

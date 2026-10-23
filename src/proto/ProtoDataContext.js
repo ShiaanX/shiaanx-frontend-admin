@@ -1,417 +1,182 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { LEGACY_JOB_STATUS, ROWS, INITIAL_CUSTOMERS, INITIAL_ARTIFACT_STATE, PART_LIBRARY, MATERIAL_OPTIONS, FINISH_OPTIONS, SETTINGS } from './fixtures';
-import { kvGet, kvSet, fileSave, fileGet, fileOpen, fileDownload } from './db';
+import { LEGACY_JOB_STATUS } from './fixtures';
+import { call, fetchDocument, hasToken, login as apiLogin, logout as apiLogout, AuthError } from './api';
 
-// Everything you add in the preview — new enquiries, customers, uploads, checklist state — is kept
-// here and mirrored into IndexedDB (see db.js), so it survives a reload in THIS browser only.
-// Nothing fills in on its own: Generate/Upload only happen when you click them. The sample rows
-// from fixtures.js can be hidden with the "Sample data" toggle without losing anything you added.
+// All data lives in shiaanx-backend (the production-flow API, /api/v1/admin/flow), shared by everyone
+// on the team. This provider loads it once, keeps it fresh (after every change, and every 20 s while
+// the tab is open), and exposes the same actions the screens were built against. Nothing fills in on
+// its own: every write here is the result of a click.
 const ProtoDataContext = createContext(null);
 
-const K = {
-  userRows: 'userRows', userCustomers: 'userCustomers', userPartLibrary: 'userPartLibrary',
-  artifactState: 'artifactState', clientReleased: 'clientReleased', sampleDataOn: 'sampleDataOn',
-  userMaterials: 'userMaterials', userFinishes: 'userFinishes', rowOverrides: 'rowOverrides',
-  partStatusOverrides: 'partStatusOverrides', customerOverrides: 'customerOverrides', deletedCustomers: 'deletedCustomers',
-  autoQuoteState: 'autoQuoteState', partLibraryOverrides: 'partLibraryOverrides', cappUrl: 'cappUrl', settingsTables: 'settingsTables',
-};
+const REFRESH_MS = 20000;
 
-// Settings lists as rows of strings, seeded from the sample values.
-const INITIAL_SETTINGS = {
-  users: SETTINGS.users.map(r => r.slice(0, 2)),
-  materials: SETTINGS.materials.map(r => r.slice(0, 3)),
-  tools: SETTINGS.tools.map(r => r.slice(0, 3)),
-  machines: SETTINGS.machines.map(r => r.slice(0, 3)),
-};
+// Placeholder for the AI lines that are not connected to a real generator yet: something to open,
+// stamped with when it was made, saying plainly that it is not computed.
+function placeholderFile(label) {
+  const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const html = `<!doctype html><title>${label}</title><body style="font:14px system-ui;padding:40px;max-width:640px;margin:auto">
+    <h2>${label}</h2><p>Marked generated on ${when}.</p>
+    <p style="color:#64748b">This line is not connected to a generator yet, so nothing was computed. It only marks the item done so the flow can be followed end to end.</p></body>`;
+  return new File([html], `${label.replace(/\W+/g, '_')}.html`, { type: 'text/html' });
+}
 
-const DEFAULT_CAPP_URL = 'http://localhost:8001';
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+function partLibraryFrom(rows) {
+  const lib = {};
+  rows.forEach(r => r.parts.forEach(p => {
+    const s = p.planSummary || {};
+    lib[p.tmpl] = {
+      name: p.name, customer: r.customer, rev: String((p.revisions || []).length + 1),
+      programSource: s.programSource || 'Enquiry stage', setups: s.setups || 'Not yet planned',
+      operations: s.operations || '—', stock: s.stock || '—', planStatus: s.planStatus || 'PENDING',
+      datums: null, dims: null, fixture: null,
+      cadFileKey: p.fileKey || null, drawingFileKey: p.drawingFileKey || null, drawingFileName: p.drawingFileName || null,
+      qcJobId: p.qcJobId || null,
+    };
+  }));
+  return lib;
+}
 
-// The CAPP pipeline only has cutting data for these; anything else is planned as aluminium and the
-// result says so.
-function pipelineMaterial(name) {
-  const n = (name || '').toLowerCase();
-  if (n.includes('alumin')) return { key: 'aluminium', exact: true };
-  if (n.includes('titanium')) return { key: 'titanium', exact: true };
-  if (n.includes('brass')) return { key: 'brass', exact: true };
-  if (n.includes('steel')) return { key: 'steel', exact: true };
-  return { key: 'aluminium', exact: false };
+// Anything being made — an order, or a job produced without one — is on the board from the start:
+// a part with no stage yet is in the queue. Stage names saved before the rename map over.
+function withStages(r) {
+  const inProduction = r.isOrder || r.jobType === 'TRIAL';
+  return { ...r, parts: r.parts.map(p => ({ ...p, jobStatus: LEGACY_JOB_STATUS[p.jobStatus] || p.jobStatus || (inProduction ? 'IN_QUEUE' : undefined) })) };
+}
+
+function openBlob(entry, download) {
+  const url = URL.createObjectURL(entry.blob);
+  if (download) {
+    const a = document.createElement('a');
+    a.href = url; a.download = entry.name || 'download';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return url;
 }
 
 export function ProtoDataProvider({ children }) {
-  const [userRows, setUserRows] = useState([]);
-  const [userCustomers, setUserCustomers] = useState([]);
-  const [userPartLibrary, setUserPartLibrary] = useState({});
-  const [artifactState, setArtifactState] = useState(INITIAL_ARTIFACT_STATE);
-  const [clientReleased, setClientReleased] = useState({});
-  const [sampleDataOn, setSampleDataOn] = useState(true);
-  const [userMaterials, setUserMaterials] = useState([]);
-  const [userFinishes, setUserFinishes] = useState([]);
-  // Patches applied on top of a row by id — covers both user-created rows and the sample fixture
-  // rows, so Convert to order / Edit quote / Produce without an order work the same on a sample row
-  // (for trying the flow) as on one you created.
-  const [rowOverrides, setRowOverrides] = useState({});
-  // Production Board drag-and-drop: {rowId: {partIndex: newJobStatus}}, layered onto the matching
-  // part the same way rowOverrides layers onto a row — so a dragged status shows up everywhere that
-  // part appears (the board, the order's Closed-loop card), not just on the board itself.
-  const [partStatusOverrides, setPartStatusOverrides] = useState({});
-  // Same pattern again, keyed by customer name: Edit/Delete in Customers works on a sample customer
-  // (to try it) or one you added, through one path instead of two.
-  const [customerOverrides, setCustomerOverrides] = useState({});
-  const [deletedCustomers, setDeletedCustomers] = useState([]);
-  // {rowId: {partIndex: {data, status}}} — the same shape as shiaanx-backend's
-  // enquiry_parts.auto_quote_data / auto_quote_status, so this maps onto the real schema later
-  // instead of its own invented one.
-  const [autoQuoteState, setAutoQuoteState] = useState({});
-  // Patches onto a Part Workspace entry by tmpl id — mirrors rowOverrides so a sample part's
-  // workspace view (drawing/finish) can be revised too, same as a row.
-  const [partLibraryOverrides, setPartLibraryOverrides] = useState({});
-  const [cappUrl, setCappUrlState] = useState(DEFAULT_CAPP_URL);
-  const [settingsTables, setSettingsTables] = useState(INITIAL_SETTINGS);
+  const [authed, setAuthed] = useState(hasToken());
+  const [data, setData] = useState(null); // bootstrap payload
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
   // Live status of a running Generate, keyed `${jobId}:${artifactId}` — {text} while running,
-  // {error} if it failed. Not persisted.
+  // {error} if it failed.
   const [artifactProgress, setArtifactProgress] = useState({});
-  const [loaded, setLoaded] = useState(false);
-  const seq = useRef(0);
+  const busy = useRef(0);
+
+  const onAuthLost = useCallback(() => { apiLogout(); setAuthed(false); setData(null); }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const d = await call('GET', '/bootstrap');
+      setData(d);
+      setLoadError('');
+    } catch (e) {
+      if (e instanceof AuthError) onAuthLost();
+      else setLoadError(e.message);
+    }
+  }, [onAuthLost]);
 
   useEffect(() => {
-    (async () => {
-      // Enquiries created when the drawing was kept once per enquiry: move it onto the first part,
-      // under the name it was uploaded with, so it shows (and opens) like any other part drawing.
-      const storedRows = await kvGet(K.userRows, []);
-      let migrated = false;
-      for (const r of storedRows) {
-        if (r.drawingFileKey && r.parts[0] && !r.parts[0].drawingFileKey) {
-          const entry = await fileGet(r.drawingFileKey);
-          r.parts[0] = { ...r.parts[0], drawingFileKey: r.drawingFileKey, drawingFileName: r.drawingFileName || (entry && entry.name) || 'Drawing.pdf' };
-          migrated = true;
-        }
-      }
-      if (migrated) kvSet(K.userRows, storedRows);
-      setUserRows(storedRows);
-      setUserCustomers(await kvGet(K.userCustomers, []));
-      setUserPartLibrary(await kvGet(K.userPartLibrary, {}));
-      setArtifactState(await kvGet(K.artifactState, INITIAL_ARTIFACT_STATE));
-      setClientReleased(await kvGet(K.clientReleased, {}));
-      setSampleDataOn(await kvGet(K.sampleDataOn, true));
-      setUserMaterials(await kvGet(K.userMaterials, []));
-      setUserFinishes(await kvGet(K.userFinishes, []));
-      setRowOverrides(await kvGet(K.rowOverrides, {}));
-      setPartStatusOverrides(await kvGet(K.partStatusOverrides, {}));
-      setCustomerOverrides(await kvGet(K.customerOverrides, {}));
-      setDeletedCustomers(await kvGet(K.deletedCustomers, []));
-      setAutoQuoteState(await kvGet(K.autoQuoteState, {}));
-      setPartLibraryOverrides(await kvGet(K.partLibraryOverrides, {}));
-      setCappUrlState(await kvGet(K.cappUrl, DEFAULT_CAPP_URL));
-      setSettingsTables({ ...INITIAL_SETTINGS, ...(await kvGet(K.settingsTables, {})) });
-      setLoaded(true);
-    })();
-  }, []);
+    if (!authed) return undefined;
+    refresh();
+    const t = setInterval(() => { if (!document.hidden && busy.current === 0) refresh(); }, REFRESH_MS);
+    // Coming back to the tab shows what others changed meanwhile, without waiting for the timer.
+    const onVisible = () => { if (!document.hidden && busy.current === 0) refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, [authed, refresh]);
 
-  const nextId = useCallback((prefix) => {
-    seq.current += 1;
-    return `${prefix}-${Date.now().toString(36).toUpperCase()}${seq.current}`;
-  }, []);
-
-  const addCustomer = useCallback((c) => {
-    setUserCustomers(prev => { const next = [...prev, c]; kvSet(K.userCustomers, next); return next; });
-  }, []);
-
-  const updateCustomer = useCallback((name, patch) => {
-    setCustomerOverrides(prev => {
-      const next = { ...prev, [name]: { ...(prev[name] || {}), ...patch } };
-      kvSet(K.customerOverrides, next);
-      return next;
-    });
-  }, []);
-
-  const deleteCustomer = useCallback((name) => {
-    setDeletedCustomers(prev => {
-      if (prev.includes(name)) return prev;
-      const next = [...prev, name];
-      kvSet(K.deletedCustomers, next);
-      return next;
-    });
-  }, []);
-
-  // Builds the enquiry row — one or more parts — plus a matching Part Workspace entry for each
-  // part, saves any uploaded CAD file / drawing into the file store, and returns the new row's id.
-  // Each part keeps its own drawing (a drawing is specific to one part, not shared across the
-  // enquiry) alongside its own CAD file.
-  const createEnquiry = useCallback(async (form) => {
-    const jobId = nextId('ENQ-USER');
-    const today = new Date().toISOString().slice(0, 10);
-    const customer = form.customer || 'Unnamed customer';
-
-    const parts = [];
-    const libraryEntries = {};
-    for (let i = 0; i < form.parts.length; i++) {
-      const p = form.parts[i];
-      const tmpl = nextId('TMPL-USER');
-      let cadFileKey = null;
-      if (p.cadFile) { cadFileKey = `${jobId}:cad:${i}`; await fileSave(cadFileKey, p.cadFile); }
-      let drawingFileKey = null, drawingFileName = null;
-      if (p.drawingFile) {
-        drawingFileKey = `${jobId}:drawing:${i}`;
-        drawingFileName = p.drawingFile.name;
-        await fileSave(drawingFileKey, p.drawingFile);
-      }
-      const name = p.partName || `Untitled part ${i + 1}`;
-      parts.push({
-        tmpl, name, material: p.material, qty: Number(p.qty) || 1,
-        finish: p.finish, file: p.cadFile ? p.cadFile.name : 'Not uploaded', fileKey: cadFileKey,
-        drawingFileKey, drawingFileName,
-      });
-      libraryEntries[tmpl] = {
-        name, customer, rev: '1', programSource: 'Enquiry stage',
-        setups: 'Not yet planned', operations: '—', stock: '—', planStatus: 'PENDING',
-        datums: null, dims: null, fixture: null, cadFileKey, drawingFileKey, drawingFileName,
-      };
-    }
-
-    const row = {
-      id: jobId, customer, date: today, status: 'PENDING', isOrder: false,
-      remarks: form.remarks || '', assemblyName: form.assemblyName || '', parts,
-    };
-    setUserRows(prev => { const next = [...prev, row]; kvSet(K.userRows, next); return next; });
-    setUserPartLibrary(prev => { const next = { ...prev, ...libraryEntries }; kvSet(K.userPartLibrary, next); return next; });
-    return jobId;
-  }, [nextId]);
-
-  const patchRow = useCallback((id, patch) => {
-    setRowOverrides(prev => {
-      const next = { ...prev, [id]: { ...(prev[id] || {}), ...patch } };
-      kvSet(K.rowOverrides, next);
-      return next;
-    });
-  }, []);
-
-  const patchPartLibrary = useCallback((tmpl, patch) => {
-    setPartLibraryOverrides(prev => {
-      const next = { ...prev, [tmpl]: { ...(prev[tmpl] || {}), ...patch } };
-      kvSet(K.partLibraryOverrides, next);
-      return next;
-    });
-  }, []);
-
-  // One combined "the client sent updates" action for the whole enquiry, mirroring the New Enquiry
-  // form filled in with the current values: any of a part's qty/material/finish/CAD file/drawing
-  // can change, remarks can change, and new parts can be added in the same pass. Nothing is
-  // overwritten — each changed existing part gets its prior qty/material/finish/CAD/drawing/remarks
-  // appended to that part's revisions[] before the new values replace them; a brand-new part is just
-  // added. Takes the current `row` object (from `rows`/`findRow`) rather than looking it up itself.
-  //
-  // `formParts` entries: existing ones carry {existing:true, originalIndex, qty, material, finish,
-  // cadFile?, drawingFile?}; newly added ones carry {existing:false, partName, qty, material,
-  // finish, cadFile?, drawingFile?}.
-  const applyEnquiryUpdate = useCallback(async (row, { remarks, assemblyName, parts: formParts, note }) => {
-    const at = new Date().toISOString();
-    const newParts = [];
-    const libraryPatches = {};
-    const newLibraryEntries = {};
-
-    for (let i = 0; i < formParts.length; i++) {
-      const fp = formParts[i];
-      if (fp.existing) {
-        const orig = row.parts[fp.originalIndex];
-        const qty = Number(fp.qty) || orig.qty;
-        const material = fp.material || orig.material;
-        const finish = fp.finish || orig.finish;
-
-        let fileKey = orig.fileKey, fileName = orig.file;
-        if (fp.cadFile) {
-          fileKey = `${row.id}:cad:${fp.originalIndex}:${Date.now().toString(36)}`;
-          fileName = fp.cadFile.name;
-          await fileSave(fileKey, fp.cadFile);
-        }
-        let drawingFileKey = orig.drawingFileKey, drawingFileName = orig.drawingFileName;
-        if (fp.drawingFile) {
-          drawingFileKey = `${row.id}:drawing:${fp.originalIndex}:${Date.now().toString(36)}`;
-          drawingFileName = fp.drawingFile.name;
-          await fileSave(drawingFileKey, fp.drawingFile);
-        }
-
-        const changed = qty !== orig.qty || material !== orig.material || finish !== orig.finish || !!fp.cadFile || !!fp.drawingFile;
-        const revisions = changed
-          ? [...(orig.revisions || []), {
-              at, note: note || '',
-              qty: orig.qty, material: orig.material, finish: orig.finish,
-              file: orig.file, fileKey: orig.fileKey,
-              drawingFileKey: orig.drawingFileKey, drawingFileName: orig.drawingFileName,
-              remarks: row.remarks,
-            }]
-          : (orig.revisions || []);
-
-        const updated = { ...orig, qty, material, finish, file: fileName, fileKey, drawingFileKey, drawingFileName, revisions };
-        newParts.push(updated);
-        libraryPatches[orig.tmpl] = { material, finish, cadFileKey: fileKey, drawingFileKey, drawingFileName };
-      } else {
-        const tmpl = nextId('TMPL-USER');
-        let fileKey = null, fileName = 'Not uploaded';
-        if (fp.cadFile) { fileKey = `${row.id}:cad:new:${tmpl}`; fileName = fp.cadFile.name; await fileSave(fileKey, fp.cadFile); }
-        let drawingFileKey = null, drawingFileName = null;
-        if (fp.drawingFile) { drawingFileKey = `${row.id}:drawing:new:${tmpl}`; drawingFileName = fp.drawingFile.name; await fileSave(drawingFileKey, fp.drawingFile); }
-        const name = fp.partName || `Untitled part ${i + 1}`;
-        newParts.push({ tmpl, name, material: fp.material, qty: Number(fp.qty) || 1, finish: fp.finish, file: fileName, fileKey, drawingFileKey, drawingFileName });
-        newLibraryEntries[tmpl] = {
-          name, customer: row.customer, rev: '1', programSource: 'Enquiry stage',
-          setups: 'Not yet planned', operations: '—', stock: '—', planStatus: 'PENDING',
-          datums: null, dims: null, fixture: null, cadFileKey: fileKey, drawingFileKey, drawingFileName,
-        };
-      }
-    }
-
-    const remarksChanged = remarks !== undefined && remarks !== row.remarks;
-    const assemblyNameChanged = assemblyName !== undefined && assemblyName !== (row.assemblyName || '');
-    patchRow(row.id, {
-      parts: newParts,
-      ...(remarksChanged ? { remarks } : {}),
-      ...(assemblyNameChanged ? { assemblyName } : {}),
-    });
-    Object.entries(libraryPatches).forEach(([tmpl, patch]) => patchPartLibrary(tmpl, patch));
-    if (Object.keys(newLibraryEntries).length) {
-      setUserPartLibrary(prev => { const next = { ...prev, ...newLibraryEntries }; kvSet(K.userPartLibrary, next); return next; });
-    }
-  }, [nextId, patchRow, patchPartLibrary]);
-
-  const setSettingsTable = useCallback((name, tableRows) => {
-    setSettingsTables(prev => { const next = { ...prev, [name]: tableRows }; kvSet(K.settingsTables, next); return next; });
-  }, []);
-
-  const setCappUrl = useCallback((url) => {
-    const clean = (url || '').trim().replace(/\/+$/, '') || DEFAULT_CAPP_URL;
-    setCappUrlState(clean);
-    kvSet(K.cappUrl, clean);
-  }, []);
-
-  // Process plan: the one checklist item that is really generated. Each part's uploaded STEP file is
-  // sent to the CAPP service (capp_service in the shiaanx-CAPP repo — the 8-stage pipeline), and the
-  // program sheet PDF it returns is stored as the artifact. The setups / operations / envelope it
-  // works out also fill that part's Part Workspace overview. The service has to be running and
-  // reachable from this browser; if it isn't, this says so rather than faking a result.
-  const generateProcessPlan = useCallback(async (jobId, row, partIndex) => {
-    const pKey = `${jobId}:p${partIndex}.plan`;
-    const say = (text) => setArtifactProgress(prev => ({ ...prev, [pKey]: { text } }));
-    const fail = (error) => setArtifactProgress(prev => ({ ...prev, [pKey]: { error } }));
-
-    const targets = row.parts.map((p, i) => ({ p, i })).filter(t => t.i === partIndex && t.p.fileKey);
-    if (targets.length === 0) {
-      fail('No STEP file is attached to this part, and the CAM program is worked out from the STEP file. Attach one first.');
-      return;
-    }
-
-    const files = [];
-    const summaries = [];
-    const notes = [];
+  // Runs one change against the server. A returned row replaces the one on screen straight away;
+  // then everything is reloaded so other people's changes show too. Errors are shown in the banner
+  // and re-thrown so a form can keep itself open.
+  const run = useCallback(async (fn) => {
+    busy.current += 1;
+    setActionError('');
     try {
-      for (const { p, i } of targets) {
-        const entry = await fileGet(p.fileKey);
-        if (!entry) throw new Error(`The STEP file for ${p.name} is no longer in this browser's storage.`);
-        const mat = pipelineMaterial(p.material);
-        if (!mat.exact) notes.push(`${p.name}: no cutting data for ${p.material}, planned as aluminium`);
-
-        say(`${p.name}: sending STEP file to the CAPP pipeline…`);
-        const body = new FormData();
-        body.append('step_file', entry.blob, entry.name || 'part.step');
-        body.append('part_name', p.name);
-        body.append('material', mat.key);
-        let res;
-        try {
-          res = await fetch(`${cappUrl}/jobs`, { method: 'POST', body });
-        } catch (e) {
-          throw new Error(`Could not reach the CAPP service at ${cappUrl}. It has to be running on this computer for the CAM program to be generated.`);
-        }
-        if (!res.ok) throw new Error(`CAPP service refused the file (${res.status}).`);
-        const { job_id: cappJob } = await res.json();
-
-        let status;
-        for (let n = 0; n < 240; n++) {
-          await sleep(1500);
-          status = await (await fetch(`${cappUrl}/jobs/${cappJob}`)).json();
-          if (status.status === 'COMPLETE' || status.status === 'FAILED') break;
-          say(`${p.name}: stage ${status.stage}/9 — ${status.stage_name}`);
-        }
-        if (!status || status.status !== 'COMPLETE') {
-          const why = status && status.error ? String(status.error).trim().split('\n').slice(-3).join(' ') : 'timed out';
-          throw new Error(`The pipeline failed on ${p.name}: ${why}`);
-        }
-
-        say(`${p.name}: fetching the program sheet…`);
-        const pdf = await (await fetch(`${cappUrl}/jobs/${cappJob}/pdf`)).blob();
-        const fileKey = `${jobId}:plan:${i}`;
-        await fileSave(fileKey, new File([pdf], `${p.name}_program_sheet.pdf`, { type: 'application/pdf' }));
-        files.push({ label: p.name, fileKey });
-
-        const out = await (await fetch(`${cappUrl}/jobs/${cappJob}/output/setups`)).json();
-        const setups = out.setups || [];
-        const ops = setups.reduce((sum, s) => sum + (s.operation_count || 0), 0);
-        const bb = out.bounding_box || {};
-        summaries.push({ setups: setups.length, ops });
-        patchPartLibrary(p.tmpl, {
-          setups: `${setups.length} — ${setups.map(s => s.wcs).join(', ')}`,
-          operations: `${ops}, across ${setups.length} setup${setups.length === 1 ? '' : 's'}`,
-          stock: bb.length_x ? `Part envelope ${bb.length_x} × ${bb.length_y} × ${bb.length_z} mm` : '—',
-          programSource: 'AI_GENERATED · CAPP pipeline', planStatus: 'DRAFT', cappJobId: cappJob,
-        });
+      const out = await fn();
+      if (out && out.uuid && out.parts) {
+        setData(d => (d ? { ...d, rows: d.rows.some(r => r.uuid === out.uuid) ? d.rows.map(r => (r.uuid === out.uuid ? out : r)) : [out, ...d.rows] } : d));
       }
+      busy.current -= 1;
+      refresh();
+      return out;
     } catch (e) {
-      fail(e.message || String(e));
-      return;
+      busy.current -= 1;
+      if (e instanceof AuthError) onAuthLost();
+      else setActionError(e.message || String(e));
+      throw e;
     }
+  }, [refresh, onAuthLost]);
 
-    const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const totals = `${summaries[0].setups} setup(s), ${summaries[0].ops} operations`;
-    const note = [`CAPP pipeline · ${when} · ${totals}`, ...notes].filter(Boolean).join(' · ');
-    setArtifactState(prev => {
-      const next = { ...prev, [jobId]: { ...(prev[jobId] || {}), [`p${partIndex}.plan`]: { done: true, fileKey: files[0].fileKey, note } } };
-      kvSet(K.artifactState, next);
-      return next;
+  const login = useCallback(async (email, password) => { await apiLogin(email, password); setAuthed(true); }, []);
+  const logout = useCallback(() => onAuthLost(), [onAuthLost]);
+
+  const rows = data ? data.rows.map(withStages) : [];
+  const findRow = (id) => rows.find(r => r.uuid === id || r.id === id);
+  const rowForJob = (jobId) => rows.find(r => r.id === jobId || r.orderId === jobId || r.uuid === jobId);
+  const customers = data ? data.customers : [];
+  const customerByName = (name) => customers.find(c => c.name === name);
+
+  // ── customers ──
+  const addCustomer = (c) => run(() => call('POST', '/customers', { json: c }));
+  const updateCustomer = (name, patch) => {
+    const c = customerByName(name);
+    return c ? run(() => call('PATCH', `/customers/${c.id}`, { json: patch })) : Promise.resolve();
+  };
+  const deleteCustomer = (name) => {
+    const c = customerByName(name);
+    return c ? run(() => call('DELETE', `/customers/${c.id}`)) : Promise.resolve();
+  };
+
+  // ── enquiries ──
+  const formWithParts = (payload, parts) => {
+    const form = new FormData();
+    form.append('payload', JSON.stringify(payload));
+    parts.forEach((p, i) => {
+      if (p.cadFile) form.append(`cad_${i}`, p.cadFile, p.cadFile.name);
+      if (p.drawingFile) form.append(`drawing_${i}`, p.drawingFile, p.drawingFile.name);
     });
-    setArtifactProgress(prev => { const next = { ...prev }; delete next[pKey]; return next; });
-  }, [cappUrl, patchPartLibrary]);
+    return form;
+  };
 
-  // Turns any enquiry row into an order — generates an order id and switches it over, same as a
-  // real "Convert to order" would. Works on a sample row too, so the flow can be tried end to end.
-  const convertToOrder = useCallback((id, statusNow) => {
-    // Re-converting after a revert reuses the earlier order id, so whatever was uploaded against
-    // that order (PO, CAM program, certificates) is attached again instead of orphaned.
-    const prior = rowOverrides[id] || {};
-    const orderId = prior.lastOrderId || nextId('ORD-USER');
-    const today = new Date().toISOString().slice(0, 10);
-    const deadline = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
-    patchRow(id, {
-      isOrder: true, orderId, orderDate: today, deadline, status: 'IN_PRODUCTION', jobType: undefined,
-      statusBeforeOrder: statusNow || prior.statusBeforeOrder || 'QUOTED',
-    });
-    return orderId;
-  }, [nextId, patchRow, rowOverrides]);
+  // Returns the new enquiry's id for its page address.
+  const createEnquiry = async (f) => {
+    const c = f.customer ? customerByName(f.customer) : null;
+    const payload = {
+      customerId: c ? c.id : null, remarks: f.remarks || '', assemblyName: f.assemblyName || '',
+      parts: f.parts.map(p => ({ partName: p.partName, qty: p.qty, material: p.material, finish: p.finish })),
+    };
+    const row = await run(() => call('POST', '/enquiries', { form: formWithParts(payload, f.parts) }));
+    return row.uuid;
+  };
 
-  // Undo for Convert to order: the record goes back to being an enquiry with the quote status it
-  // had before. Nothing uploaded is deleted — the order id is remembered for a later re-convert.
-  const revertToEnquiry = useCallback((row) => {
-    patchRow(row.id, {
-      isOrder: false, orderId: undefined, orderDate: undefined, deadline: undefined,
-      lastOrderId: row.orderId, status: row.statusBeforeOrder || 'QUOTED',
-    });
-  }, [patchRow]);
+  // One "the client sent updates" action for the whole enquiry; see UpdateEnquiryModal. The server
+  // keeps what each changed part was before as a revision — nothing is overwritten.
+  const applyEnquiryUpdate = (row, { remarks, assemblyName, parts, note }) => {
+    const payload = {
+      remarks, assemblyName, note,
+      parts: parts.map(p => (p.existing
+        ? { existing: true, partId: row.parts[p.originalIndex].uuid, qty: p.qty, material: p.material, finish: p.finish }
+        : { partName: p.partName, qty: p.qty, material: p.material, finish: p.finish })),
+    };
+    return run(() => call('POST', `/enquiries/${row.uuid}/update`, { form: formWithParts(payload, parts) }));
+  };
 
-  // "We're manufacturing this without a confirmed order" — moved here from enquiry creation, so it
-  // is a decision you make about an enquiry that already exists, not a checkbox up front. Order?
-  // stays No, but it unlocks the full artifact checklist (CAM program, inspection, etc.) the same
-  // way converting to an order would.
-  const markNoOrderJob = useCallback((id) => {
-    patchRow(id, { jobType: 'TRIAL', status: 'IN_PRODUCTION' });
-  }, [patchRow]);
+  const patchEnquiry = (row, patch) => run(() => call('PATCH', `/enquiries/${row.uuid}`, { json: patch }));
 
-  const updateQuote = useCallback((id, patch) => patchRow(id, patch), [patchRow]);
+  // Both return the row's id for its page address (the same id serves the enquiry and the order).
+  const convertToOrder = async (id) => { const r = findRow(id); await run(() => call('POST', `/enquiries/${r.uuid}/convert`)); return r.uuid; };
+  const revertToEnquiry = async (row) => { await run(() => call('POST', `/enquiries/${row.uuid}/revert`)); return row.uuid; };
+  const markNoOrderJob = (id) => { const r = findRow(id); return run(() => call('POST', `/enquiries/${r.uuid}/no-order`)); };
 
-  const getAutoQuote = useCallback((rowId, partIndex) => (autoQuoteState[rowId] || {})[partIndex] || null, [autoQuoteState]);
+  // ── quotes ──
+  const getAutoQuote = (rowId, partIndex) => { const r = findRow(rowId); return (r && r.parts[partIndex] && r.parts[partIndex].autoQuote) || null; };
 
-  // Fills the same field shape insta_quote/server.py's /process endpoint returns (and
-  // enquiry_parts.auto_quote_data stores), but with sensible defaults rather than real geometry —
-  // there's no backend here to run the actual CAPP pipeline. Only runs when you click it.
-  const generateAutoQuote = useCallback((rowId, partIndex, part) => {
-    const data = {
+  // Fills the same field shape insta_quote's /process returns (and enquiry_parts.auto_quote_data
+  // stores), with starting values rather than real geometry. Only runs when clicked.
+  const generateAutoQuote = (rowId, partIndex, part) => {
+    const d = {
       partName: part.name, quantity: part.qty || 1, materialName: part.material,
       setupCount: 1, stepCount: 6, cycleTimeMin: 12, uniqueOperations: 4, weightedFeatures: 6,
       featureCount: 4, faceMillCount: 1, circularInterpCount: 0, contourMillCount: 1,
@@ -426,156 +191,144 @@ export function ProtoDataProvider({ children }) {
       notes: 'Starting values only — fill in the real figures for this part before sending.',
       finishes: [], secondaryOps: [], extraCharges: [], _source: 'placeholder',
     };
-    setAutoQuoteState(prev => {
-      const next = { ...prev, [rowId]: { ...(prev[rowId] || {}), [partIndex]: { data, status: 'DRAFT' } } };
-      kvSet(K.autoQuoteState, next);
-      return next;
-    });
-    return data;
-  }, []);
-
-  const saveAutoQuote = useCallback((rowId, partIndex, data, finalize) => {
-    setAutoQuoteState(prev => {
-      const next = { ...prev, [rowId]: { ...(prev[rowId] || {}), [partIndex]: { data, status: finalize ? 'FINALIZED' : 'DRAFT' } } };
-      kvSet(K.autoQuoteState, next);
-      return next;
-    });
-    if (finalize) patchRow(rowId, { status: 'QUOTED' });
-  }, [patchRow]);
-
-  // A manual quote — an Excel sheet or PDF put together outside the auto-quote tool — attached to
-  // the enquiry directly, as an alternative to building a line-item quote in the app.
-  const uploadManualQuote = useCallback(async (rowId, file) => {
-    const fileKey = `${rowId}:manualQuote`;
-    await fileSave(fileKey, file);
-    patchRow(rowId, { manualQuoteFileKey: fileKey, manualQuoteFileName: file.name, status: 'QUOTED' });
-  }, [patchRow]);
-
-  // Dragging a Production Board card to a new column.
-  const setPartStatus = useCallback((rowId, partIndex, status) => {
-    setPartStatusOverrides(prev => {
-      const next = { ...prev, [rowId]: { ...(prev[rowId] || {}), [partIndex]: status } };
-      kvSet(K.partStatusOverrides, next);
-      return next;
-    });
-  }, []);
-
-  // src is 'human' (Upload) or 'ai'/'tech' (Generate). For a human artifact we store the real file
-  // the user picked; for a generated one we write a small placeholder document so "View" opens
-  // something real, stamped with when it was generated — nothing is computed from uploaded data yet.
-  const markArtifactDone = useCallback(async (jobId, artifactId, { src, file, label } = {}) => {
-    const fileKey = `${jobId}:${artifactId}`;
-    const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    if (src === 'human' && file) {
-      await fileSave(fileKey, file);
-    } else {
-      const html = `<!doctype html><title>${label}</title><body style="font:14px system-ui;padding:40px;max-width:640px;margin:auto">
-        <h2>${label}</h2><p>Generated in the preview on ${when}.</p>
-        <p style="color:#64748b">This is a placeholder — the preview has no backend yet to run the real pipeline, so clicking Generate does not compute real content. It only marks this item done and gives you something to open, so the flow can be clicked through end to end.</p></body>`;
-      await fileSave(fileKey, new File([html], `${artifactId}.html`, { type: 'text/html' }));
-    }
-    setArtifactState(prev => {
-      const next = { ...prev, [jobId]: { ...(prev[jobId] || {}), [artifactId]: { done: true, fileKey, note: file ? `Uploaded · ${file.name}` : `Generated · ${when}` } } };
-      kvSet(K.artifactState, next);
-      return next;
-    });
-  }, []);
-
-  const addOtherDocument = useCallback(async (jobId, scope, file) => {
-    const fileKey = `${jobId}:${scope}.other:${Date.now().toString(36)}`;
-    await fileSave(fileKey, file);
-    const at = new Date().toISOString();
-    setArtifactState(prev => {
-      const key = `${scope}.other`;
-      const job = prev[jobId] || {};
-      const items = [...((job[key] && job[key].items) || []), { fileKey, name: file.name, at }];
-      const next = { ...prev, [jobId]: { ...job, [key]: { items } } };
-      kvSet(K.artifactState, next);
-      return next;
-    });
-  }, []);
-
-  const removeOtherDocument = useCallback((jobId, scope, fileKey) => {
-    setArtifactState(prev => {
-      const key = `${scope}.other`;
-      const job = prev[jobId] || {};
-      const items = ((job[key] && job[key].items) || []).filter(it => it.fileKey !== fileKey);
-      const next = { ...prev, [jobId]: { ...job, [key]: { items } } };
-      kvSet(K.artifactState, next);
-      return next;
-    });
-  }, []);
-
-  const openArtifactFile = useCallback((jobId, artifactId) => fileOpen(`${jobId}:${artifactId}`), []);
-  const openFile = useCallback((fileKey) => fileOpen(fileKey), []);
-  const downloadFile = useCallback((fileKey) => fileDownload(fileKey), []);
-
-  const toggleClientRelease = useCallback((jobId, artifactId) => {
-    setClientReleased(prev => {
-      const jobState = prev[jobId] || { inspReport: true, materialCert: true };
-      const next = { ...prev, [jobId]: { ...jobState, [artifactId]: !jobState[artifactId] } };
-      kvSet(K.clientReleased, next);
-      return next;
-    });
-  }, []);
-
-  const getClientReleased = useCallback((jobId) => clientReleased[jobId] || { inspReport: true, materialCert: true }, [clientReleased]);
-
-  const toggleSampleData = useCallback(() => {
-    setSampleDataOn(prev => { const next = !prev; kvSet(K.sampleDataOn, next); return next; });
-  }, []);
-
-  // "+ Add new…" in the New Enquiry form's Material/Finish fields. Added once, remembered after —
-  // the next enquiry sees it as a normal option.
-  const addMaterial = useCallback((name) => {
-    setSettingsTables(prev => {
-      if (prev.materials.some(m => m[0] === name)) return prev;
-      const next = { ...prev, materials: [...prev.materials, [name, '', '']] };
-      kvSet(K.settingsTables, next);
-      return next;
-    });
-    setUserMaterials(prev => (prev.includes(name) ? prev : (() => { const next = [...prev, name]; kvSet(K.userMaterials, next); return next; })()));
-  }, []);
-  const addFinish = useCallback((name) => {
-    setUserFinishes(prev => (prev.includes(name) ? prev : (() => { const next = [...prev, name]; kvSet(K.userFinishes, next); return next; })()));
-  }, []);
-
-  const applyOverride = (r) => {
-    let out = rowOverrides[r.id] ? { ...r, ...rowOverrides[r.id] } : r;
-    const partPatch = partStatusOverrides[r.id];
-    if (partPatch) out = { ...out, parts: out.parts.map((p, i) => (partPatch[i] ? { ...p, jobStatus: partPatch[i] } : p)) };
-    // Anything being made — an order, or a job produced without one — is on the board from the
-    // start: a part with no stage yet is in the queue. Stage names saved before the rename map over.
-    const inProduction = out.isOrder || out.jobType === 'TRIAL';
-    out = { ...out, parts: out.parts.map(p => {
-      const st = LEGACY_JOB_STATUS[p.jobStatus] || p.jobStatus || (inProduction ? 'IN_QUEUE' : undefined);
-      return st === p.jobStatus ? p : { ...p, jobStatus: st };
-    }) };
-    return out;
+    const r = findRow(rowId);
+    run(() => call('PATCH', `/parts/${r.parts[partIndex].uuid}`, { json: { autoQuote: { data: d, status: 'DRAFT' } } })).catch(() => {});
+    return d;
   };
-  const rows = (sampleDataOn ? [...userRows, ...ROWS] : [...userRows]).map(applyOverride);
-  const customers = (sampleDataOn ? [...userCustomers, ...INITIAL_CUSTOMERS] : [...userCustomers])
-    .filter(c => !deletedCustomers.includes(c.name))
-    .map(c => (customerOverrides[c.name] ? { ...c, ...customerOverrides[c.name] } : c));
-  const partLibraryBase = { ...(sampleDataOn ? PART_LIBRARY : {}), ...userPartLibrary };
-  const partLibrary = Object.fromEntries(Object.entries(partLibraryBase).map(([tmpl, p]) => [
-    tmpl, partLibraryOverrides[tmpl] ? { ...p, ...partLibraryOverrides[tmpl] } : p,
-  ]));
 
-  const materials = [...new Set([...MATERIAL_OPTIONS, ...settingsTables.materials.map(m => m[0]), ...userMaterials])].filter(Boolean);
-  const finishes = [...FINISH_OPTIONS, ...userFinishes];
+  const saveAutoQuote = (rowId, partIndex, d, finalize) => {
+    const r = findRow(rowId);
+    return run(() => call('PATCH', `/parts/${r.parts[partIndex].uuid}`, { json: { autoQuote: { data: d, status: finalize ? 'FINALIZED' : 'DRAFT' } } })).catch(() => {});
+  };
+
+  // A manual quote — an Excel sheet or PDF made outside the auto-quote tool.
+  const uploadManualQuote = (rowId, file) => {
+    const r = findRow(rowId);
+    const form = new FormData();
+    form.append('slot', 'manualQuote');
+    form.append('file', file, file.name);
+    return run(() => call('POST', `/enquiries/${r.uuid}/documents`, { form })).catch(() => {});
+  };
+
+  // ── parts ──
+  const setPartStatus = (rowId, partIndex, status) => {
+    const r = findRow(rowId);
+    return run(() => call('PATCH', `/parts/${r.parts[partIndex].uuid}`, { json: { stage: status } })).catch(() => {});
+  };
+  const patchPartLibrary = (tmpl, patch) => {
+    const body = {};
+    if ('qcJobId' in patch) body.qcJobId = patch.qcJobId;
+    return run(() => call('PATCH', `/parts/${tmpl}`, { json: body })).catch(() => {});
+  };
+
+  // CAM program (AI): the server sends the part's current STEP file through the CAPP pipeline and
+  // stores the program sheet it returns.
+  const generateProcessPlan = async (jobId, row, partIndex) => {
+    const pKey = `${jobId}:p${partIndex}.plan`;
+    const part = row.parts[partIndex];
+    if (!part.fileKey) {
+      setArtifactProgress(prev => ({ ...prev, [pKey]: { error: 'No STEP file is attached to this part, and the CAM program is worked out from the STEP file. Attach one first.' } }));
+      return;
+    }
+    setArtifactProgress(prev => ({ ...prev, [pKey]: { text: `${part.name}: running the CAPP pipeline on the STEP file…` } }));
+    try {
+      await run(() => call('POST', `/parts/${part.uuid}/generate-cam`));
+      setArtifactProgress(prev => { const next = { ...prev }; delete next[pKey]; return next; });
+    } catch (e) {
+      setActionError('');
+      setArtifactProgress(prev => ({ ...prev, [pKey]: { error: e.message || String(e) } }));
+    }
+  };
+
+  // ── documents ──
+  const slotOf = (row, artifactId) => {
+    const m = /^p(\d+)\.(.+)$/.exec(artifactId);
+    if (!m) return { slot: artifactId, partId: null };
+    const part = row.parts[Number(m[1])];
+    return { slot: m[2], partId: part ? part.uuid : null };
+  };
+
+  const uploadTo = (row, slot, partId, file, note) => {
+    const form = new FormData();
+    form.append('slot', slot);
+    if (partId) form.append('partId', partId);
+    if (note) form.append('note', note);
+    form.append('file', file, file.name);
+    return run(() => call('POST', `/enquiries/${row.uuid}/documents`, { form })).catch(() => {});
+  };
+
+  // src 'human' uploads the picked file; a not-yet-connected AI line stores a placeholder that says so.
+  const markArtifactDone = (jobId, artifactId, { src, file, label } = {}) => {
+    const row = rowForJob(jobId);
+    const { slot, partId } = slotOf(row, artifactId);
+    if (src === 'human' && file) return uploadTo(row, slot, partId, file);
+    return uploadTo(row, slot, partId, placeholderFile(label || artifactId), `Marked generated · not connected yet`);
+  };
+
+  const addOtherDocument = (jobId, scope, file) => {
+    const row = rowForJob(jobId);
+    const partId = scope === 'job' ? null : slotOf(row, `${scope}.other`).partId;
+    return uploadTo(row, 'other', partId, file);
+  };
+  const removeOtherDocument = (jobId, scope, fileKey) => run(() => call('DELETE', `/documents/${fileKey}`)).catch(() => {});
+
+  const fetchFile = useCallback((fileKey) => fetchDocument(fileKey).catch((e) => {
+    if (e instanceof AuthError) onAuthLost();
+    return null;
+  }), [onAuthLost]);
+
+  // The tab is opened before the file arrives, so the browser treats it as part of the click and
+  // does not block it as a pop-up.
+  const openFile = async (fileKey) => {
+    const w = window.open('', '_blank');
+    const entry = await fetchFile(fileKey);
+    if (!entry) { if (w) w.close(); setActionError('That file could not be opened.'); return false; }
+    const url = openBlob(entry, false);
+    if (w) w.location.href = url; else window.open(url, '_blank');
+    return true;
+  };
+  const downloadFile = async (fileKey) => {
+    const entry = await fetchFile(fileKey);
+    if (!entry) { setActionError('That file could not be downloaded.'); return false; }
+    openBlob(entry, true);
+    return true;
+  };
+  const openArtifactFile = (jobId, artifactId) => {
+    const e = (rowForJob(jobId) || {}).checklist || {};
+    return e[artifactId] && e[artifactId].fileKey ? openFile(e[artifactId].fileKey) : Promise.resolve(false);
+  };
+
+  const artifactState = Object.fromEntries(rows.flatMap(r => [[r.id, r.checklist || {}], ...(r.orderId && r.orderId !== r.id ? [[r.orderId, r.checklist || {}]] : [])]));
+  const getClientReleased = (jobId) => ((rowForJob(jobId) || {}).released) || {};
+  const toggleClientRelease = (jobId, artifactId) => {
+    const row = rowForJob(jobId);
+    const entry = row && row.checklist[artifactId];
+    if (!entry || !entry.fileKey) return Promise.resolve();
+    return run(() => call('PATCH', `/documents/${entry.fileKey}`, { json: { clientVisible: !row.released[artifactId] } })).catch(() => {});
+  };
+
+  // ── settings ──
+  const settings = data ? data.settings : { users: [], materials: [], finishes: [], tools: [], machines: [] };
+  const saveSetting = (kind, id, values) => run(() => call(id ? 'PATCH' : 'POST', id ? `/settings/${kind}/${id}` : `/settings/${kind}`, { json: values }));
+  const removeSetting = (kind, id) => run(() => call('DELETE', `/settings/${kind}/${id}`));
+  const addMaterial = (name) => saveSetting('materials', null, { name }).catch(() => {});
+  const addFinish = (name) => saveSetting('finishes', null, { name }).catch(() => {});
+  const materials = settings.materials.map(m => m.name);
+  const finishes = settings.finishes.map(f => f.name);
 
   const value = {
-    loaded, rows, customers, partLibrary, sampleDataOn, toggleSampleData,
+    authed, login, logout, me: data && data.me,
+    loaded: !!data, loadError, actionError, clearActionError: () => setActionError(''), refresh,
+    rows, customers, partLibrary: partLibraryFrom(rows),
     materials, finishes, addMaterial, addFinish,
-    findRow: (id) => rows.find(r => r.id === id),
-    findOrder: (orderId) => rows.find(r => r.orderId === orderId),
-    addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, updateQuote, setPartStatus,
-    applyEnquiryUpdate,
+    findRow,
+    findOrder: (id) => rows.find(r => r.isOrder && (r.uuid === id || r.orderId === id)),
+    addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob,
+    patchEnquiry, setPartStatus, applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
-    settingsTables, setSettingsTable, patchPartLibrary,
-    cappUrl, setCappUrl, generateProcessPlan, artifactProgress, addOtherDocument, removeOtherDocument,
-    artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile,
+    settings, saveSetting, removeSetting, patchPartLibrary,
+    generateProcessPlan, artifactProgress, addOtherDocument, removeOtherDocument,
+    artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile, fetchFile,
     getClientReleased, toggleClientRelease,
   };
 

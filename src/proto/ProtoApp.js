@@ -32,9 +32,37 @@ function crumbFor(pathname) {
   return hit ? hit.crumb : 'Sales / Enquiries & Orders';
 }
 
+function LoginScreen() {
+  const { login } = useProtoData();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try { await login(email.trim(), password); } catch (err) { setError(err.message || String(err)); setBusy(false); }
+  };
+  return (
+    <div className="proto-app login-screen">
+      <form className="card login-card" onSubmit={submit}>
+        <div className="sidebar-top" style={{ padding: 0, marginBottom: 18 }}><div className="brand-mark">SX</div><div className="brand-name" style={{ color: 'var(--ink)' }}>ShiaanX</div></div>
+        <h2 style={{ margin: '0 0 14px' }}>Log in</h2>
+        <div className="field"><label>Email</label><input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} autoFocus /></div>
+        <div className="field"><label>Password</label><input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></div>
+        {error && <p className="field-error" style={{ margin: '0 0 10px' }}>{error}</p>}
+        <button type="submit" className="btn px-btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={busy || !email || !password}>{busy ? 'Logging in…' : 'Log in'}</button>
+        <p className="cell-sub" style={{ marginTop: 14 }}>Accounts are added by an admin under Settings → Users.</p>
+      </form>
+    </div>
+  );
+}
+
+const initials = (name) => (name || '?').split(/s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+
 function Shell({ children }) {
   const [navOpen, setNavOpen] = useState(true);
-  const { sampleDataOn, toggleSampleData } = useProtoData();
+  const { me, logout, actionError, clearActionError, loadError } = useProtoData();
   const location = useLocation();
   const crumb = crumbFor(location.pathname);
   const [section, title] = crumb.split(' / ');
@@ -63,26 +91,36 @@ function Shell({ children }) {
           <button type="button" className="px-icon-btn" onClick={() => setNavOpen(o => !o)} aria-label="Toggle menu"><Icon name="base" /></button>
           <div className="crumb">{section} / <b>{title}</b></div>
           <div className="topbar-spacer" />
-          <button
-            type="button"
-            className="sample-toggle"
-            onClick={toggleSampleData}
-            title={sampleDataOn ? 'Hide the sample enquiries and customers, keeping anything you added' : 'Show the sample enquiries and customers again'}
-          >
-            <span className={`toggle ${sampleDataOn ? 'on' : ''}`} /> <span className="sample-toggle-label">Sample data</span>
-          </button>
-          <span className="preview-flag">Preview — your uploads stay in this browser</span>
-          <div className="avatar" style={{ marginLeft: 14 }}>AK</div>
+          <span className="preview-flag">Dev environment — shared with the team</span>
+          <span className="sample-toggle" style={{ cursor: 'default' }}>{me ? me.name : ''}</span>
+          <button type="button" className="sample-toggle" onClick={logout}>Log out</button>
+          <div className="avatar" style={{ marginLeft: 6 }} title={me ? me.email : ''}>{initials(me && me.name)}</div>
         </header>
-        <main>{children}</main>
+        <main>
+          {(actionError || loadError) && (
+            <div className="error-banner" role="alert">
+              <span>{actionError || `Could not load the latest data: ${loadError}`}</span>
+              {actionError && <button type="button" className="btn-text" onClick={clearActionError}>Dismiss</button>}
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );
 }
 
+function Gate({ children }) {
+  const { authed, loaded, loadError } = useProtoData();
+  if (!authed) return <LoginScreen />;
+  if (!loaded) return <div className="proto-app login-screen"><div className="empty-hint">{loadError ? `Could not reach the server: ${loadError}` : 'Loading…'}</div></div>;
+  return children;
+}
+
 export default function ProtoApp() {
   return (
     <ProtoDataProvider>
+      <Gate>
       <Shell>
         <Routes>
           <Route index element={<EnquiriesOrders />} />
@@ -98,6 +136,7 @@ export default function ProtoApp() {
           <Route path="settings" element={<Settings />} />
         </Routes>
       </Shell>
+      </Gate>
     </ProtoDataProvider>
   );
 }

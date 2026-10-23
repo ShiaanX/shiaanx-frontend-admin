@@ -14,14 +14,13 @@ import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const { findOrder, revertToEnquiry } = useProtoData();
+  const { findOrder, revertToEnquiry, patchEnquiry } = useProtoData();
   const r = findOrder(orderId);
   const [showUpdate, setShowUpdate] = useState(false);
   if (!r) return <div className="empty-hint">Order not found.</div>;
   const revert = () => {
     if (!window.confirm(`Turn ${r.orderId} back into enquiry ${r.id}? Nothing uploaded is deleted, and converting again later brings this order back.`)) return;
-    revertToEnquiry(r);
-    navigate(`/proto/enquiries/${r.id}`);
+    revertToEnquiry(r).then(id => navigate(`/proto/enquiries/${id}`)).catch(() => {});
   };
   // Same statuses as the Production Board; an order sits at the stage of its least-advanced piece.
   const stage = Math.min(...r.parts.map(p => JOB_STATUSES.indexOf(p.jobStatus)));
@@ -48,8 +47,10 @@ export default function OrderDetail() {
               <dt>Deadline</dt><dd>{fmtDate(r.deadline)}</dd>
             </dl>
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="field"><label>Final PO value</label><input defaultValue={r.poValue || ''} placeholder="₹ e.g. 84,500" /></div>
-              <div className="field"><label>Remarks</label><textarea defaultValue={r.remarks || ''} placeholder="Notes about this order…" /></div>
+              <div className="field"><label>Final PO value</label><input key={`po-${r.poValue}`} defaultValue={r.poValue || ''} placeholder="₹ e.g. 84,500"
+                onBlur={e => { if (e.target.value !== (r.poValue || '')) patchEnquiry(r, { poValue: e.target.value }).catch(() => {}); }} /></div>
+              <div className="field"><label>Remarks</label><textarea key={`rm-${r.remarks}`} defaultValue={r.remarks || ''} placeholder="Notes about this order…"
+                onBlur={e => { if (e.target.value !== (r.remarks || '')) patchEnquiry(r, { remarks: e.target.value }).catch(() => {}); }} /></div>
             </div>
           </div>
           <ClosedLoopCard parts={r.parts} />

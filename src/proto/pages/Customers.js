@@ -14,7 +14,7 @@ export default function Customers() {
     const msg = enqCount > 0
       ? `Delete ${c.name}? ${enqCount} enquir${enqCount === 1 ? 'y' : 'ies'} will keep this customer's name, just unlinked from this list.`
       : `Delete ${c.name}?`;
-    if (window.confirm(msg)) deleteCustomer(c.name);
+    if (window.confirm(msg)) deleteCustomer(c.name).catch(() => {});
   };
 
   return (
@@ -31,7 +31,7 @@ export default function Customers() {
             {customers.map(c => {
               const enq = rows.filter(r => r.customer === c.name);
               return (
-                <tr key={c.name}>
+                <tr key={c.id}>
                   <td className="cell-primary">{c.name}</td>
                   <td>{c.company || '—'}</td>
                   <td><div>{c.email || '—'}</div><div className="cell-sub">{c.phone || ''}</div></td>

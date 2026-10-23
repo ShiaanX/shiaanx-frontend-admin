@@ -26,7 +26,7 @@ export default function PartWorkspace() {
 
   // The job this part belongs to: Back returns there, and its documents hold the program sheet.
   const owner = rows.find(r => r.parts.some(p => p.tmpl === tmplId));
-  const backTo = owner ? (owner.isOrder ? `/proto/orders/${owner.orderId}` : `/proto/enquiries/${owner.id}`) : null;
+  const backTo = owner ? (owner.isOrder ? `/proto/orders/${owner.uuid}` : `/proto/enquiries/${owner.uuid}`) : null;
   const backLabel = owner ? `Back to ${owner.isOrder ? owner.orderId : owner.id}` : 'Back';
   const back = (
     <button type="button" className="back-link" onClick={() => (backTo ? navigate(backTo) : navigate(-1))}>

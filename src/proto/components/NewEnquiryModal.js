@@ -34,11 +34,13 @@ export default function NewEnquiryModal({ onClose }) {
   const [showErrors, setShowErrors] = useState(false);
   const [error, setError] = useState('');
 
-  const saveQuickAdd = () => {
+  const saveQuickAdd = async () => {
     const name = qa.name.trim() || 'New customer';
-    addCustomer({ name, company: qa.company || name, email: qa.email, website: qa.website, phone: qa.phone });
-    setCustomerName(name);
-    setShowQuickAdd(false);
+    try {
+      await addCustomer({ name, company: qa.company || name, email: qa.email, website: qa.website, phone: qa.phone });
+      setCustomerName(name);
+      setShowQuickAdd(false);
+    } catch (e) { setError(`Could not save the customer: ${e.message || e}`); }
   };
 
   const updatePart = (key, patch) => setParts(prev => prev.map(p => (p.key === key ? { ...p, ...patch } : p)));
@@ -84,7 +86,7 @@ export default function NewEnquiryModal({ onClose }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <select style={{ flex: 1 }} value={customerName} onChange={(e) => setCustomerName(e.target.value)}>
             <option value="">Select a customer…</option>
-            {customers.map(c => <option key={c.name} value={c.name}>{customerLabel(c)}</option>)}
+            {customers.map(c => <option key={c.id} value={c.name}>{customerLabel(c)}</option>)}
           </select>
           <button type="button" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setShowQuickAdd(s => !s)}>
             <Icon name="plus" /> New

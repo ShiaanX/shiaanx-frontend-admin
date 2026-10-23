@@ -304,3 +304,9 @@
 .proto-app .artifact-row .art-actions { flex-shrink: 1; max-width: 100%; }
 
 .proto-app .artifact-row .art-actions { margin-left: auto; }
+
+/* login + error banner (dev environment) */
+.proto-app.login-screen { min-height: 100vh; display: grid; place-items: center; background: var(--bg, #f5f7fb); padding: 16px; }
+.proto-app .login-card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 4px; }
+.proto-app .login-card .field { margin-bottom: 10px; }
+.proto-app .error-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; background: var(--error-bg); color: var(--error-ink); border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }

@@ -13,7 +13,7 @@ import { fmtDate } from '../utils';
 function TrialJobDetail({ r }) {
   const navigate = useNavigate();
   const { convertToOrder } = useProtoData();
-  const linkToOrder = () => navigate(`/proto/orders/${convertToOrder(r.id, 'QUOTED')}`);
+  const linkToOrder = () => convertToOrder(r.uuid).then(id => navigate(`/proto/orders/${id}`)).catch(() => {});
   const [showUpdate, setShowUpdate] = useState(false);
   return (
     <div>
@@ -69,14 +69,14 @@ export default function EnquiryDetail() {
   // Once converted this id belongs under /orders/:orderId — if something still links to the old
   // /enquiries/:id (e.g. a bookmark, or clicking Convert to order from here), follow it there.
   useEffect(() => {
-    if (r && r.isOrder) navigate(`/proto/orders/${r.orderId}`, { replace: true });
+    if (r && r.isOrder) navigate(`/proto/orders/${r.uuid}`, { replace: true });
   }, [r, navigate]);
 
   if (!r) return <div className="empty-hint">Enquiry not found.</div>;
   if (r.isOrder) return null;
   if (r.jobType === 'TRIAL') return <TrialJobDetail r={r} />;
 
-  const convert = () => navigate(`/proto/orders/${convertToOrder(r.id, r.status)}`);
+  const convert = () => convertToOrder(r.uuid).then(uid => navigate(`/proto/orders/${uid}`)).catch(() => {});
   const onManualQuoteChosen = (e) => {
     const file = e.target.files[0];
     e.target.value = '';
@@ -93,7 +93,7 @@ export default function EnquiryDetail() {
         </div>
         <div className="head-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
-          <button type="button" className="btn btn-ghost" onClick={() => markNoOrderJob(r.id)}>Produce without a confirmed order</button>
+          <button type="button" className="btn btn-ghost" onClick={() => markNoOrderJob(r.uuid).catch(() => {})}>Produce without a confirmed order</button>
           <button type="button" className="btn px-btn-primary" onClick={convert}>Convert to order</button>
         </div>
       </div>

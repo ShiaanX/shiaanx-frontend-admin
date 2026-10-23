@@ -2,41 +2,49 @@ import React, { useState } from 'react';
 import Icon from '../icons';
 import { useProtoData } from '../ProtoDataContext';
 
-// One editable list: rows are arrays of strings, one per column. A row is edited in place; Add
-// opens a blank row in edit mode, and a row left completely blank is dropped rather than saved.
-function EditableTable({ title, addLabel, columns, rows, onChange }) {
-  const [editing, setEditing] = useState(null); // { index, draft, isNew }
+// One editable list. Each row is saved to the server on its own: Add opens a blank row in edit
+// mode, Save sends it, Remove deletes it. A `secret` column (a password) is never shown; left blank
+// while editing, it stays as it was.
+function EditableTable({ title, addLabel, columns, items, onSave, onRemove, removeLabel = (it) => it[columns[0].key] }) {
+  const [editing, setEditing] = useState(null); // { id, draft, isNew }
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const start = (index) => setEditing({ index, draft: columns.map((_, c) => rows[index][c] || ''), isNew: false });
-  const add = () => setEditing({ index: rows.length, draft: columns.map(() => ''), isNew: true });
-  const cancel = () => setEditing(null);
-  const save = () => {
-    const draft = editing.draft.map(v => v.trim());
-    if (draft.every(v => !v)) { setEditing(null); return; }
-    const next = rows.slice();
-    next[editing.index] = draft;
-    onChange(next);
-    setEditing(null);
+  const start = (it) => { setError(''); setEditing({ id: it.id, draft: Object.fromEntries(columns.map(c => [c.key, c.secret ? '' : String(it[c.key] ?? '')])), isNew: false }); };
+  const add = () => { setError(''); setEditing({ id: null, draft: Object.fromEntries(columns.map(c => [c.key, ''])), isNew: true }); };
+  const cancel = () => { setEditing(null); setError(''); };
+  const save = async () => {
+    const draft = Object.fromEntries(Object.entries(editing.draft).map(([k, v]) => [k, v.trim()]));
+    if (Object.values(draft).every(v => !v)) { setEditing(null); return; }
+    columns.filter(c => c.secret && !draft[c.key]).forEach(c => delete draft[c.key]);
+    setSaving(true); setError('');
+    try {
+      await onSave(editing.id, draft);
+      setEditing(null);
+    } catch (e) { setError(e.message || String(e)); }
+    setSaving(false);
   };
-  const remove = (index) => {
-    if (window.confirm(`Remove ${rows[index][0] || 'this row'}?`)) onChange(rows.filter((_, i) => i !== index));
+  const remove = async (it) => {
+    if (!window.confirm(`Remove ${removeLabel(it) || 'this row'}?`)) return;
+    try { await onRemove(it.id); } catch (e) { /* shown in the banner */ }
   };
-  const setCell = (c, v) => setEditing(e => ({ ...e, draft: e.draft.map((x, i) => (i === c ? v : x)) }));
+  const setCell = (k, v) => setEditing(e => ({ ...e, draft: { ...e.draft, [k]: v } }));
 
   const editRow = (key) => (
     <tr key={key}>
       {columns.map((col, c) => (
-        <td key={col.label}>
+        <td key={col.key}>
           <div className="field">
-            <input autoFocus={c === 0} value={editing.draft[c]} placeholder={col.placeholder || col.label}
-              onChange={e => setCell(c, e.target.value)}
+            <input autoFocus={c === 0} type={col.secret ? 'password' : (col.type || 'text')} autoComplete={col.secret ? 'new-password' : 'off'}
+              value={editing.draft[col.key]} placeholder={col.secret && !editing.isNew ? 'Unchanged' : (col.placeholder || col.label)}
+              onChange={e => setCell(col.key, e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }} />
           </div>
         </td>
       ))}
       <td>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button type="button" className="btn-sm primary" onClick={save}>Save</button>
+          <button type="button" className="btn-sm primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save'}</button>
           <button type="button" className="btn-sm text" onClick={cancel}>Cancel</button>
         </div>
       </td>
@@ -51,16 +59,20 @@ function EditableTable({ title, addLabel, columns, rows, onChange }) {
       </div>
       <div className="tablecard overflow-x">
         <table className="data">
-          <thead><tr>{columns.map(col => <th key={col.label}>{col.label}</th>)}<th /></tr></thead>
+          <thead><tr>{columns.map(col => <th key={col.key}>{col.label}</th>)}<th /></tr></thead>
           <tbody>
-            {rows.length === 0 && !editing && <tr><td colSpan={columns.length + 1}><div className="empty-hint">Nothing here yet.</div></td></tr>}
-            {rows.map((r, i) => (editing && !editing.isNew && editing.index === i ? editRow(i) : (
-              <tr key={i}>
-                {columns.map((col, c) => <td key={col.label} className={c === 0 ? 'cell-primary' : (col.mono ? 'mono' : '')}>{r[c] || '—'}</td>)}
+            {items.length === 0 && !editing && <tr><td colSpan={columns.length + 1}><div className="empty-hint">Nothing here yet.</div></td></tr>}
+            {items.map((it) => (editing && !editing.isNew && editing.id === it.id ? editRow(it.id) : (
+              <tr key={it.id}>
+                {columns.map((col, c) => (
+                  <td key={col.key} className={c === 0 ? 'cell-primary' : (col.mono ? 'mono' : '')}>
+                    {col.secret ? '••••••' : (it[col.key] !== undefined && it[col.key] !== '' && it[col.key] !== null ? String(it[col.key]) : '—')}
+                  </td>
+                ))}
                 <td>
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button type="button" className="btn-text" disabled={!!editing} onClick={() => start(i)}>Edit</button>
-                    <button type="button" className="btn-text" disabled={!!editing} style={{ color: 'var(--error)' }} onClick={() => remove(i)}>Remove</button>
+                    <button type="button" className="btn-text" disabled={!!editing} onClick={() => start(it)}>Edit</button>
+                    {onRemove && <button type="button" className="btn-text" disabled={!!editing} style={{ color: 'var(--error)' }} onClick={() => remove(it)}>Remove</button>}
                   </div>
                 </td>
               </tr>
@@ -69,27 +81,35 @@ function EditableTable({ title, addLabel, columns, rows, onChange }) {
           </tbody>
         </table>
       </div>
+      {error && <p className="field-error" style={{ margin: '8px 0 0' }}>{error}</p>}
     </div>
   );
 }
 
 export default function Settings() {
-  const { settingsTables, setSettingsTable } = useProtoData();
+  const { settings, saveSetting, removeSetting } = useProtoData();
+  const table = (kind) => ({ items: settings[kind], onSave: (id, values) => saveSetting(kind, id, values), onRemove: (id) => removeSetting(kind, id) });
   return (
     <div>
       <div className="page-head"><div><h1>Settings</h1><div className="page-sub">The lists the rest of the app draws on. Customers live under Sales.</div></div></div>
 
-      <EditableTable title="Users" addLabel="Add user" rows={settingsTables.users} onChange={r => setSettingsTable('users', r)}
-        columns={[{ label: 'Name', placeholder: 'e.g. Priya Sharma' }, { label: 'Designation', placeholder: 'e.g. Process engineer' }]} />
+      <EditableTable title="Users" addLabel="Add user" {...table('users')}
+        columns={[
+          { key: 'name', label: 'Name', placeholder: 'e.g. Priya Sharma' },
+          { key: 'designation', label: 'Designation', placeholder: 'e.g. Process engineer' },
+          { key: 'email', label: 'Login email', placeholder: 'name@shiaanx.com', type: 'email' },
+          { key: 'password', label: 'Password', placeholder: 'At least 8 characters', secret: true },
+        ]} />
+      <p className="cell-sub" style={{ marginTop: 8 }}>Everyone listed here can log in to this app with their email and password.</p>
 
-      <EditableTable title="Materials & finishes" addLabel="Add material" rows={settingsTables.materials} onChange={r => setSettingsTable('materials', r)}
-        columns={[{ label: 'Material', placeholder: 'e.g. Aluminium 6082' }, { label: 'Rate', placeholder: '₹ 450/kg', mono: true }, { label: 'Finishes available', placeholder: 'As machined, Anodised' }]} />
+      <EditableTable title="Materials & finishes" addLabel="Add material" {...table('materials')}
+        columns={[{ key: 'name', label: 'Material', placeholder: 'e.g. Aluminium 6082' }, { key: 'rate', label: 'Rate (₹/kg)', placeholder: '450', mono: true }, { key: 'finishes', label: 'Finishes available', placeholder: 'As machined, Anodised' }]} />
 
-      <EditableTable title="Tool catalogue" addLabel="Add tool" rows={settingsTables.tools} onChange={r => setSettingsTable('tools', r)}
-        columns={[{ label: 'Tool code', placeholder: 'e.g. EM_2FL_8MM' }, { label: 'Type', placeholder: 'End mill, 2-flute' }, { label: 'Diameter', placeholder: '8 mm' }]} />
+      <EditableTable title="Tool catalogue" addLabel="Add tool" {...table('tools')}
+        columns={[{ key: 'code', label: 'Tool code', placeholder: 'e.g. EM_2FL_8MM' }, { key: 'type', label: 'Type', placeholder: 'End mill, 2-flute' }, { key: 'diameter', label: 'Diameter', placeholder: '8 mm' }]} />
 
-      <EditableTable title="Machines" addLabel="Add machine" rows={settingsTables.machines} onChange={r => setSettingsTable('machines', r)}
-        columns={[{ label: 'Machine', placeholder: 'e.g. VMC-03' }, { label: 'Controller', placeholder: 'Fanuc 0iMD' }, { label: 'Magazine', placeholder: '20 slots' }]} />
+      <EditableTable title="Machines" addLabel="Add machine" {...table('machines')}
+        columns={[{ key: 'name', label: 'Machine', placeholder: 'e.g. VMC-03' }, { key: 'controller', label: 'Controller', placeholder: 'Fanuc 0iMD' }, { key: 'magazine', label: 'Magazine', placeholder: '20 slots' }]} />
     </div>
   );
 }

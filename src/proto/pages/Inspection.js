@@ -5,12 +5,12 @@ import KpiStrip from '../components/KpiStrip';
 import { VerdictBadge } from '../components/Badges';
 import { INSPECTION_BY_PART } from '../fixtures';
 import { useProtoData } from '../ProtoDataContext';
-import { fileGet } from '../db';
 
-// Where the 3D QC view is served from: the labeling app in the shiaanx-CAPP repo, running on this
-// computer. It maps each ballooned drawing dimension to the CAD faces it measures and colours the
-// result, so the report can be read without knowing the drawing.
-const QC_VIEW_URL = 'http://localhost:8780';
+// Where the 3D QC view is served from: the labeling app in the shiaanx-CAPP repo. On the dev server
+// it sits behind the same address as this app; REACT_APP_QC_URL points elsewhere for local work.
+// It maps each ballooned drawing dimension to the CAD faces it measures and colours the result, so
+// the report can be read without knowing the drawing.
+const QC_VIEW_URL = (process.env.REACT_APP_QC_URL || '').replace(/\/+$/, '');
 // Added to the embedded page's address so a copy cached before an update is never reused.
 const PAGE_LOAD = Date.now();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -32,7 +32,7 @@ async function postFile(url, file, name) {
 // "Set up" sends the STEP and the sheet across once and remembers the result against the part, so
 // from then on the view opens by itself. The one step a person still does is tagging: clicking,
 // for each balloon, the face(s) it measures.
-function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) {
+function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile, fetchFile }) {
   const [reach, setReach] = useState(null);     // null checking, true, false
   const [info, setInfo] = useState(null);       // { tagged, total } | { missing: true }
   const [report, setReport] = useState(null);   // { blob, name } of the uploaded inspection report
@@ -50,9 +50,9 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
   useEffect(() => {
     let dead = false;
     if (!reportKey) { setReport(null); return undefined; }
-    fileGet(reportKey).then(e => { if (!dead) setReport(e ? { blob: e.blob, name: e.name } : null); });
+    fetchFile(reportKey).then(e => { if (!dead) setReport(e ? { blob: e.blob, name: e.name } : null); });
     return () => { dead = true; };
-  }, [reportKey]);
+  }, [reportKey, fetchFile]);
 
   const loadInfo = async (jobId, keepMode) => {
     const res = await fetch(`${QC_VIEW_URL}/api/labeling-jobs/${jobId}/dimensions`);
@@ -88,8 +88,8 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
     setError('');
     try {
       setBusy('Sending the CAD file…');
-      const cad = await fileGet(part.fileKey);
-      if (!cad) throw new Error("The CAD file is no longer in this browser's storage.");
+      const cad = await fetchFile(part.fileKey);
+      if (!cad) throw new Error('The CAD file could not be loaded from the server.');
       let job = await postFile(`${QC_VIEW_URL}/api/labeling-jobs`, cad.blob, cad.name || 'part.step');
       for (let n = 0; n < 400 && job.status !== 'completed' && job.status !== 'failed'; n++) {
         setBusy(`Preparing the 3D model — ${job.phase || job.status}${job.progress ? ` (${job.progress}%)` : ''}`);
@@ -125,7 +125,7 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
 
   let body;
   if (reach === null) body = <div className="empty-hint">Looking for the 3D QC view…</div>;
-  else if (reach === false) body = <div className="empty-hint">The 3D QC view is not running on this computer. It is the labeling app — start it with run.bat in the labeling_app folder, then reload this page.</div>;
+  else if (reach === false) body = <div className="empty-hint">The 3D QC service is not reachable right now. Reload the page in a minute; if it stays like this, the service needs restarting on the server.</div>;
   else if (!linkedJob) {
     const hasCad = !!part.fileKey;
     const sheetOk = !!report && isXlsx(report.name);
@@ -145,7 +145,7 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
   else if (info.missing) {
     body = (
       <div className="empty-hint">
-        This part's 3D QC data was not found on this computer.{' '}
+        This part's 3D QC data was not found on the QC service.{' '}
         <button type="button" className="btn-text" onClick={() => onLink(null)}>Set it up again</button>
       </div>
     );
@@ -190,7 +190,7 @@ function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile }) 
 export default function Inspection() {
   const { part } = useParams();
   const navigate = useNavigate();
-  const { rows, partLibrary, artifactState, openFile, patchPartLibrary } = useProtoData();
+  const { rows, partLibrary, artifactState, openFile, fetchFile, patchPartLibrary } = useProtoData();
   const back = <button type="button" className="back-link" onClick={() => navigate(-1)}><Icon name="back" /> Back</button>;
 
   const owner = rows.find(r => r.parts.some(p => p.name === part));
@@ -221,7 +221,7 @@ export default function Inspection() {
       </div>
       {tmpl && (
         <QcView3D part={owner.parts[partIndex]} linkedJob={linkedQc}
-          reportKey={reportKey} balloonKey={balloonKey} openFile={openFile}
+          reportKey={reportKey} balloonKey={balloonKey} openFile={openFile} fetchFile={fetchFile}
           onLink={(jobId) => patchPartLibrary(tmpl, { qcJobId: jobId })} />
       )}
       {!linkedQc && <div className="card">

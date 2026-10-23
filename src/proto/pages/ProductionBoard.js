@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProtoData } from '../ProtoDataContext';
-import { JOB_STATUSES, JOB_STATUS_LABEL, PARTNER_JOBS } from '../fixtures';
+import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
 
 // Columns are JOB_STATUSES, the same vocabulary as an order's status timeline. In-house cards are
 // derived from the same rows as the list (so the two cannot drift apart) and can be dragged between
@@ -20,10 +20,9 @@ export default function ProductionBoard() {
     jobs.push({
       id: `${r.id}:${idx}`, rowId: r.id, partIndex: idx, draggable: true,
       n: `${p.name} #1`, m: r.customer, tag: 'inhouse', tl: p.machine || '—', status: p.jobStatus,
-      to: r.isOrder ? `/proto/orders/${r.orderId}` : `/proto/enquiries/${r.id}`,
+      to: r.isOrder ? `/proto/orders/${r.uuid}` : `/proto/enquiries/${r.uuid}`,
     });
   }));
-  PARTNER_JOBS.forEach((j, i) => jobs.push({ ...j, id: `partner:${i}`, draggable: false }));
 
   const onDrop = (status) => {
     setOverCol(null);
@@ -36,7 +35,7 @@ export default function ProductionBoard() {
 
   return (
     <div>
-      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every part in an order or a job being produced, by stage. A new order starts in the queue. Drag a card to change its stage — partner-shop cards aren't linked to a job record yet, so they can't be dragged.</div></div></div>
+      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every part in an order or a job being produced, by stage. A new order starts in the queue. Drag a card to change its stage.</div></div></div>
       <div className="board">
         {JOB_STATUSES.map(status => {
           const col = jobs.filter(j => j.status === status);
