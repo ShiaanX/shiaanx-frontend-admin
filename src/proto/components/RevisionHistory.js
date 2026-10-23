@@ -20,7 +20,7 @@ export default function RevisionHistory({ part }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
           {revisions.map((rv, i) => (
             <div key={i} className="part-row" style={{ background: 'var(--shell-bg)' }}>
-              <div className="part-row-head"><span className="cell-sub">Replaced {fmtDate(rv.at.slice(0, 10))}</span></div>
+              <div className="part-row-head"><span className="cell-sub">{rv.at ? `Replaced ${fmtDate(String(rv.at).slice(0, 10))}` : 'Replaced'}</span></div>
               <div className="mini-grid">
                 <div><span className="ml">Material</span><span className="mv">{rv.material}</span></div>
                 <div><span className="ml">Qty</span><span className="mv">{rv.qty}</span></div>
