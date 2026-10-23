@@ -136,48 +136,87 @@ export function ProtoDataProvider({ children }) {
   };
 
   // ── enquiries ──
-  const formWithParts = (payload, parts) => {
+  // Per part: cad_<i>, drawing_<i> (one each) and received_<i> (any number of client reference
+  // documents); jobFiles go in received_job (project-level reference documents).
+  const formWithParts = (payload, parts, jobFiles = []) => {
     const form = new FormData();
     form.append('payload', JSON.stringify(payload));
     parts.forEach((p, i) => {
       if (p.cadFile) form.append(`cad_${i}`, p.cadFile, p.cadFile.name);
       if (p.drawingFile) form.append(`drawing_${i}`, p.drawingFile, p.drawingFile.name);
+      (p.receivedFiles || []).forEach(f => form.append(`received_${i}`, f, f.name));
     });
+    (jobFiles || []).forEach(f => form.append('received_job', f, f.name));
     return form;
   };
+  // Process names for the payload; undefined (not sent) means "leave as it is" on an existing part.
+  const processesOf = (p) => (Array.isArray(p.processes) ? p.processes : undefined);
 
   // Returns the new enquiry's id for its page address.
   const createEnquiry = async (f) => {
     const c = f.customer ? customerByName(f.customer) : null;
     const payload = {
       customerId: c ? c.id : null, remarks: f.remarks || '', assemblyName: f.assemblyName || '',
-      parts: f.parts.map(p => ({ partName: p.partName, qty: p.qty, material: p.material, finish: p.finish })),
+      parts: f.parts.map(p => ({ partName: p.partName, qty: p.qty, material: p.material, finish: p.finish, processes: processesOf(p) })),
     };
-    const row = await run(() => call('POST', '/enquiries', { form: formWithParts(payload, f.parts) }));
+    const row = await run(() => call('POST', '/enquiries', { form: formWithParts(payload, f.parts, f.receivedFiles) }));
     return row.uuid;
   };
 
   // One "the client sent updates" action for the whole enquiry; see UpdateEnquiryModal. The server
-  // keeps what each changed part was before as a revision — nothing is overwritten.
-  const applyEnquiryUpdate = (row, { remarks, assemblyName, parts, note }) => {
+  // keeps what each changed part was before as a revision — nothing is overwritten. A change to a
+  // part's processes counts as a change; added reference documents never replace older ones.
+  const applyEnquiryUpdate = (row, { remarks, assemblyName, parts, note, receivedFiles }) => {
     const payload = {
       remarks, assemblyName, note,
       parts: parts.map(p => (p.existing
-        ? { existing: true, partId: row.parts[p.originalIndex].uuid, qty: p.qty, material: p.material, finish: p.finish }
-        : { partName: p.partName, qty: p.qty, material: p.material, finish: p.finish })),
+        ? { existing: true, partId: row.parts[p.originalIndex].uuid, qty: p.qty, material: p.material, finish: p.finish, processes: processesOf(p) }
+        : { partName: p.partName, qty: p.qty, material: p.material, finish: p.finish, processes: processesOf(p) })),
     };
-    return run(() => call('POST', `/enquiries/${row.uuid}/update`, { form: formWithParts(payload, parts) }));
+    return run(() => call('POST', `/enquiries/${row.uuid}/update`, { form: formWithParts(payload, parts, receivedFiles) }));
   };
 
   const patchEnquiry = (row, patch) => run(() => call('PATCH', `/enquiries/${row.uuid}`, { json: patch }));
 
   // Both return the row's id for its page address (the same id serves the enquiry and the order).
-  const convertToOrder = async (id) => { const r = findRow(id); await run(() => call('POST', `/enquiries/${r.uuid}/convert`)); return r.uuid; };
+  // partIds (optional): only those parts are ordered, the rest are marked "Not ordered".
+  const convertToOrder = async (id, partIds) => {
+    const r = findRow(id);
+    await run(() => call('POST', `/enquiries/${r.uuid}/convert`, { json: partIds ? { partIds } : {} }));
+    return r.uuid;
+  };
   const revertToEnquiry = async (row) => { await run(() => call('POST', `/enquiries/${row.uuid}/revert`)); return row.uuid; };
+  // Adds parts left out at Convert to the order.
+  const addPartsToOrder = (row, partIds) => run(() => call('POST', `/enquiries/${row.uuid}/order-parts`, { json: { partIds } }));
+  // Repeat order: a new enquiry <original>_R<n> with the chosen parts and copies of their files.
+  // Returns the new enquiry's id for its page address.
+  const repeatEnquiry = async (row, partIds) => {
+    const out = await run(() => call('POST', `/enquiries/${row.uuid}/repeat`, { json: partIds ? { partIds } : {} }));
+    return out.uuid;
+  };
   const markNoOrderJob = (id) => { const r = findRow(id); return run(() => call('POST', `/enquiries/${r.uuid}/no-order`)); };
   // The customer has the order: every part goes to Delivered (and off the board) and the delivery
   // date is stamped. `false` undoes it — the parts go back to Dispatched and the date is cleared.
   const markDelivered = (row, delivered) => run(() => call('POST', `/enquiries/${row.uuid}/delivered`, { json: { delivered: !!delivered } }));
+
+  // ── complaints & feedback ──
+  // data: { kind, receivedOn, description, partIds, qtyAffected }; files go in as attachments.
+  // Each returns the job's updated row (its row.complaints holds the list).
+  const addComplaint = (row, data, files = []) => {
+    const form = new FormData();
+    form.append('payload', JSON.stringify(data || {}));
+    (files || []).forEach(f => form.append('attachment', f, f.name));
+    return run(() => call('POST', `/enquiries/${row.uuid}/complaints`, { form }));
+  };
+  // patch: any of kind, receivedOn, description, partIds, qtyAffected, status, resolution,
+  // resolvedOn. Status RESOLVED with no resolvedOn is dated today by the server.
+  const updateComplaint = (id, patch) => run(() => call('PATCH', `/complaints/${id}`, { json: patch }));
+  const addComplaintAttachments = (id, files) => {
+    const form = new FormData();
+    (files || []).forEach(f => form.append('attachment', f, f.name));
+    return run(() => call('POST', `/complaints/${id}/attachments`, { form }));
+  };
+  const removeComplaint = (id) => run(() => call('DELETE', `/complaints/${id}`));
 
   // ── quotes ──
   const getAutoQuote = (rowId, partIndex) => { const r = findRow(rowId); return (r && r.parts[partIndex] && r.parts[partIndex].autoQuote) || null; };
@@ -317,22 +356,26 @@ export function ProtoDataProvider({ children }) {
   };
 
   // ── settings ──
-  const settings = data ? data.settings : { users: [], materials: [], finishes: [], tools: [], machines: [] };
+  const settings = data ? { processes: [], ...data.settings } : { users: [], materials: [], finishes: [], tools: [], machines: [], processes: [] };
   const saveSetting = (kind, id, values) => run(() => call(id ? 'PATCH' : 'POST', id ? `/settings/${kind}/${id}` : `/settings/${kind}`, { json: values }));
   const removeSetting = (kind, id) => run(() => call('DELETE', `/settings/${kind}/${id}`));
   const addMaterial = (name) => saveSetting('materials', null, { name }).catch(() => {});
   const addFinish = (name) => saveSetting('finishes', null, { name }).catch(() => {});
+  const addProcess = (name) => saveSetting('processes', null, { name }).catch(() => {});
   const materials = settings.materials.map(m => m.name);
   const finishes = settings.finishes.map(f => f.name);
+  const processes = settings.processes.map(p => p.name);
 
   const value = {
     authed, login, logout, me: data && data.me,
     loaded: !!data, loadError, actionError, clearActionError: () => setActionError(''), refresh,
     rows, customers, partLibrary: partLibraryFrom(rows),
-    materials, finishes, addMaterial, addFinish,
+    materials, finishes, addMaterial, addFinish, processes, addProcess,
     findRow,
     findOrder: (id) => rows.find(r => r.isOrder && (r.uuid === id || r.orderId === id)),
     addCustomer, updateCustomer, deleteCustomer, createEnquiry, convertToOrder, revertToEnquiry, markNoOrderJob, markDelivered,
+    addPartsToOrder, repeatEnquiry,
+    addComplaint, updateComplaint, addComplaintAttachments, removeComplaint,
     patchEnquiry, setPartStatus, applyEnquiryUpdate,
     getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
     settings, saveSetting, removeSetting, patchPartLibrary,
