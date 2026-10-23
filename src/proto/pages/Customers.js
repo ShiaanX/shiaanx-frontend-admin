@@ -9,6 +9,8 @@ export default function Customers() {
   const { customers, rows, deleteCustomer } = useProtoData();
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null); // customer object, or null
+  // Grouped by company, so several contacts from the same factory sit together; then by name.
+  const byCompany = (a, b) => (a.company || a.name).localeCompare(b.company || b.name, undefined, { sensitivity: 'base' }) || a.name.localeCompare(b.name);
 
   const remove = (c, enqCount) => {
     const msg = enqCount > 0
@@ -26,14 +28,14 @@ export default function Customers() {
       </div>
       <div className="tablecard overflow-x">
         <table className="data">
-          <thead><tr><th>Customer</th><th>Company</th><th>Contact</th><th>Website</th><th>Enquiries</th><th>Orders</th><th /></tr></thead>
+          <thead><tr><th>Company</th><th>User name</th><th>Contact</th><th>Website</th><th>Enquiries</th><th>Orders</th><th /></tr></thead>
           <tbody>
-            {customers.map(c => {
-              const enq = rows.filter(r => r.customer === c.name);
+            {customers.slice().sort(byCompany).map(c => {
+              const enq = rows.filter(r => r.customerId === c.id);
               return (
                 <tr key={c.id}>
-                  <td className="cell-primary">{c.name}</td>
-                  <td>{c.company || '—'}</td>
+                  <td className="cell-primary">{c.company || '—'}</td>
+                  <td>{c.name}</td>
                   <td><div>{c.email || '—'}</div><div className="cell-sub">{c.phone || ''}</div></td>
                   <td>{c.website ? <a href={c.website} target="_blank" rel="noreferrer" className="dl-link">{c.website}</a> : '—'}</td>
                   <td>{enq.length}</td>
