@@ -7,6 +7,7 @@ import ArtifactChecklist from '../components/ArtifactChecklist';
 import AutoQuoteModal from '../components/AutoQuoteModal';
 import UpdateEnquiryModal from '../components/UpdateEnquiryModal';
 import DocumentsReceived from '../components/DocumentsReceived';
+import EditableEnquiryNumber from '../components/EditableEnquiryNumber';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
@@ -19,7 +20,7 @@ function TrialJobDetail({ r }) {
     <div>
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
       <div className="detail-head">
-        <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /><span className="badge b-neutral">NO CUSTOMER ORDER</span></div>
+        <div className="detail-title"><EditableEnquiryNumber row={r} /><StatusBadge status={r.status} /><span className="badge b-neutral">NO CUSTOMER ORDER</span></div>
         <div className="head-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
@@ -80,7 +81,7 @@ export default function EnquiryDetail() {
   const onManualQuoteChosen = (e) => {
     const file = e.target.files[0];
     e.target.value = '';
-    if (file) uploadManualQuote(r.id, file);
+    if (file) uploadManualQuote(r.uuid, file);
   };
 
   return (
@@ -88,7 +89,7 @@ export default function EnquiryDetail() {
       <button type="button" className="back-link" onClick={() => navigate('/proto')}><Icon name="back" /> Back to Enquiries &amp; Orders</button>
       <div className="detail-head">
         <div>
-          <div className="detail-title"><h1>{r.id}</h1><StatusBadge status={r.status} /></div>
+          <div className="detail-title"><EditableEnquiryNumber row={r} /><StatusBadge status={r.status} /></div>
           {r.assemblyName && <div className="page-sub" style={{ marginTop: 2 }}>{r.assemblyName}</div>}
         </div>
         <div className="head-actions">
