@@ -43,6 +43,8 @@ const authService = {
 
   // Logout (Local clear)
   logout: () => {
+    // Also drop the admin-flow session cookie that lets the 3D QC view and report through.
+    fetch(`${(process.env.REACT_APP_API_URL || '/api/v1').replace(/\/+$/, '')}/flow-session`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('isAuthenticated');
