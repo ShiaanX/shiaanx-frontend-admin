@@ -17,7 +17,9 @@ function fyRange(d) {
 }
 
 export default function EnquiriesOrders() {
-  const { rows } = useProtoData();
+  const { rows, customers } = useProtoData();
+  // The table names the customer by company; the contact person is kept for the tooltip and search.
+  const companyOf = (r) => { const c = customers.find(x => x.id === r.customerId); return (c && c.company) || r.customer; };
   const today = useMemo(() => new Date(), []);
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all');
@@ -47,11 +49,12 @@ export default function EnquiriesOrders() {
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (words.length === 0) return list;
     return list.filter(r => {
-      const hay = [r.id, r.orderId, r.customer, r.assemblyName, ...(r.parts || []).map(p => p.name)]
+      const hay = [r.id, r.orderId, r.customer, companyOf(r), r.assemblyName, ...(r.parts || []).map(p => p.name)]
         .filter(Boolean).join(' ').toLowerCase();
       return words.every(w => hay.includes(w));
     });
-  }, [scoped, filter, query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoped, filter, query, customers]);
 
   const stats = {
     total: scoped.length,
@@ -111,7 +114,7 @@ export default function EnquiriesOrders() {
             {filtered.map(r => (
               <tr key={r.id} className="rowlink" onClick={() => openRow(r)}>
                 <td className="mono cell-primary">{r.id}{r.isOrder && <div className="cell-sub mono">{r.orderId}</div>}</td>
-                <td>{r.customer}</td>
+                <td title={r.customer}>{companyOf(r)}</td>
                 <td>
                   {r.assemblyName
                     ? <>{r.assemblyName} <span className="cell-sub">({r.parts.length} part{r.parts.length === 1 ? '' : 's'})</span></>
