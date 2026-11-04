@@ -8,6 +8,7 @@ import AutoQuoteModal from '../components/AutoQuoteModal';
 import UpdateEnquiryModal from '../components/UpdateEnquiryModal';
 import DocumentsReceived from '../components/DocumentsReceived';
 import EditableEnquiryNumber from '../components/EditableEnquiryNumber';
+import EditableReceivedDate from '../components/EditableReceivedDate';
 import PartPickerModal from '../components/PartPickerModal';
 import ProcessChips, { NotOrderedBadge } from '../components/ProcessChips';
 import RepeatLinks from '../components/RepeatLinks';
@@ -87,7 +88,7 @@ function TrialJobDetail({ r }) {
         <div>
           <div className="card">
             <h2><Icon name="info" /> Job details</h2>
-            <dl className="kv"><dt>Customer</dt><dd>{r.customer}</dd><dt>Started</dt><dd>{fmtDate(r.date)}</dd><dt>Parts</dt><dd>{r.parts.length}</dd></dl>
+            <dl className="kv"><dt>Customer</dt><dd>{r.customer}</dd><dt>Started</dt><dd><EditableReceivedDate row={r} /></dd><dt>Parts</dt><dd>{r.parts.length}</dd></dl>
           </div>
           <ClosedLoopCard parts={r.parts} />
           <ArtifactChecklist jobId={r.id} row={r} hasOrder={false} />
@@ -160,7 +161,7 @@ export default function EnquiryDetail() {
             <dl className="kv">
               {r.assemblyName && <><dt>Assembly / job name</dt><dd>{r.assemblyName}</dd></>}
               <dt>Customer</dt><dd>{r.customer}</dd>
-              <dt>Received</dt><dd>{fmtDate(r.date)}</dd>
+              <dt>Received</dt><dd><EditableReceivedDate row={r} /></dd>
               <dt>Parts</dt><dd>{r.parts.length}</dd>
               <dt>Quote status</dt><dd><StatusBadge status={r.status} /></dd>
             </dl>
