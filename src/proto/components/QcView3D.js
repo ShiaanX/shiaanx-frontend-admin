@@ -110,6 +110,16 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
     await postFile(`${QC_VIEW_URL}/api/labeling-jobs/${jobId}/qc-results`, report.blob, report.name);
   };
 
+  // A view that was linked before the QC sheet existed has no balloons: once the sheet is there, read it in by itself.
+  const autoFilled = useRef(false);
+  useEffect(() => {
+    if (!autoSetup || autoFilled.current || reach !== true || !linkedJob || !info || info.missing || info.total > 0 || busy || error) return;
+    if (!report || !isXlsx(report.name)) return;
+    autoFilled.current = true;
+    refreshReadings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSetup, reach, linkedJob, info, report, busy, error]);
+
   const setUp = async (rep) => {
     setError('');
     try {
