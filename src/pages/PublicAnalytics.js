@@ -44,6 +44,101 @@ const MiniGauge = ({ value, max = 100, label, flagFn }) => {
   );
 };
 
+/* ─── Machine time breakdown (cutting / air / stopped / untracked) ─── */
+const BD_DEFS = {
+  window: 'The time range selected in the filter above — measured from the first to the last telemetry sample in it. Not necessarily how long any job took.',
+  coverage: 'Samples actually recorded ÷ seconds in the window. 100% means the controller was logged every second; a low value means the Smart Connect PC / collector was not publishing for part of the window. When this is low, every duration below is a floor, not the true figure.',
+  utilisation: 'Samples where the machine was running ÷ all samples that carry a machine_state, over the window. On the Mitsubishi (STM) machine_state 3 = running; on jyotiVMC it is 1. This is a share of LOGGED time, not calendar time — hours the PC was off are missing from both the top and bottom of the fraction. Read it next to log coverage.',
+  cutting: 'Time where the machine was running AND the cutting_time counter advanced between consecutive samples — an axis was feeding (G1/G2/G3), metal being removed.',
+  air: 'Time where the machine was running but cutting_time did NOT advance — rapid moves (G0), tool changes, spindle ramp-up, dwells, and short spans where two samples landed in the same controller-second. Spindle may be turning; nothing is being cut.',
+  stopped: 'Time where machine_state was feed-hold / stop (2) or reset (0). This is the honest mid-program pause figure — a cross-tab on live data showed state 2 agrees with the counters 99% of the time, whereas the counter-only method over-counts pauses by ~1/3.',
+  untracked: 'Time between two samples that were more than 10 s apart — the collector was not sampling. Usually idle-time under-sampling or the Smart Connect PC being off. Shown so the buckets add up to the window honestly rather than silently absorbing it.',
+};
+
+const InfoDot = ({ k }) => (
+  <span title={BD_DEFS[k]} style={{
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14,
+    borderRadius: '50%', border: '1px solid #a0aec0', color: '#718096', fontSize: 9.5,
+    fontWeight: 700, cursor: 'help', marginLeft: 5, verticalAlign: 1, fontStyle: 'normal',
+  }}>i</span>
+);
+
+function MachineBreakdown({ data, loading, fmtDur }) {
+  const card = {
+    backgroundColor: '#fff', borderRadius: 16, boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+    padding: '1.5rem', marginBottom: '1.5rem',
+  };
+  const tile = { border: '1px solid #edf2f7', borderRadius: 12, padding: '0.9rem 1rem' };
+  const k = { fontSize: '0.72rem', color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '.05em', display: 'block', marginBottom: 4 };
+  const v = { fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.15, color: '#1a1a1a' };
+  const hint = { fontSize: '0.76rem', color: '#5c5b58', marginTop: 3 };
+
+  if (loading) return <div style={{ ...card, color: '#718096' }}><FiRefreshCw className="animate-spin" size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} /> Loading machine time breakdown…</div>;
+  if (!data) return null;
+
+  const samples = data.samples || 0;
+  const sampleMin = Math.round(samples / 60);
+  const inProg = data.inProgramSeconds || ((data.cuttingSeconds || 0) + (data.airSeconds || 0)) || 0;
+  const pct = (s) => inProg ? Math.round(100 * s / inProg) : 0;
+  const states = data.stateDistribution || {};
+  const stateName = { '0': 'reset', '1': 'running', '2': 'feed-hold / stop', '3': 'running' };
+
+  return (
+    <div style={card}>
+      <h3 style={{ margin: '0 0 1rem', fontSize: '1.1rem', fontWeight: 600, color: '#1a1a1a' }}>
+        Machine time breakdown
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.9rem' }}>
+        <div style={tile}>
+          <span style={k}>Window<InfoDot k="window" /></span>
+          <div style={v}>{fmtDur(data.windowSpanSeconds)}</div>
+          <div style={hint}>{samples.toLocaleString()} samples</div>
+        </div>
+        <div style={tile}>
+          <span style={k}>Log coverage<InfoDot k="coverage" /></span>
+          <div style={v}>{data.coveragePct == null ? '—' : data.coveragePct + '%'}</div>
+          <div style={hint}>{samples.toLocaleString()} samples ≈ {sampleMin.toLocaleString()} min of data</div>
+        </div>
+        <div style={tile}>
+          <span style={k}>Utilisation<InfoDot k="utilisation" /></span>
+          <div style={v}>{data.utilisationPct == null ? '—' : data.utilisationPct + '%'}</div>
+          <div style={hint}>running ÷ logged samples</div>
+        </div>
+        <div style={tile}>
+          <span style={k}>Cutting<InfoDot k="cutting" /></span>
+          <div style={v}>{fmtDur(data.cuttingSeconds)}</div>
+          <div style={hint}>{pct(data.cuttingSeconds)}% of in-program time</div>
+        </div>
+        <div style={tile}>
+          <span style={k}>Air / positioning<InfoDot k="air" /></span>
+          <div style={v}>{fmtDur(data.airSeconds)}</div>
+          <div style={hint}>{pct(data.airSeconds)}% non-cutting</div>
+        </div>
+        <div style={tile}>
+          <span style={k}>Stopped<InfoDot k="stopped" /></span>
+          <div style={v}>{fmtDur(data.stoppedSeconds)}</div>
+          <div style={hint}>feed-hold / M00 / reset</div>
+        </div>
+        <div style={tile}>
+          <span style={k}>Untracked<InfoDot k="untracked" /></span>
+          <div style={v}>{fmtDur(data.untrackedSeconds)}</div>
+          <div style={hint}>collector not sampling</div>
+        </div>
+      </div>
+      {Object.keys(states).length > 0 && (
+        <div style={{ marginTop: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+          <span style={{ ...k, marginBottom: 0 }}>machine state</span>
+          {Object.entries(states).sort().map(([s, p]) => (
+            <span key={s} style={{ fontSize: '0.75rem', padding: '2px 9px', borderRadius: 999, border: '1px solid #e2e8f0', color: '#5c5b58' }}>
+              {s} = {stateName[s] || '?'} <b>{p}%</b>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PublicAnalytics() {
   const [summary, setSummary] = useState(null);
   const [trendData, setTrendData] = useState([]);
@@ -68,6 +163,8 @@ function PublicAnalytics() {
   const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [machineMatrix, setMachineMatrix] = useState([]);
   const [loadingMatrix, setLoadingMatrix] = useState(true);
+  const [breakdown, setBreakdown] = useState(null);
+  const [loadingBreakdown, setLoadingBreakdown] = useState(true);
   const [expandedMachineGaps, setExpandedMachineGaps] = useState({});
 
   // Programme-level state
@@ -104,23 +201,42 @@ function PublicAnalytics() {
     }
   };
 
+  // window params shared by every summary-tab fetch
+  const windowParams = () => {
+    const params = { ...machineParams() };
+    if (filters.startDate || filters.endDate) {
+      if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();
+      if (filters.endDate) params.endDate = new Date(filters.endDate).toISOString();
+    } else {
+      params.range = filters.range;
+    }
+    return params;
+  };
+
   // Fetch summary KPIs
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const params = { ...machineParams() };
-      if (filters.startDate || filters.endDate) {
-        if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();
-        if (filters.endDate) params.endDate = new Date(filters.endDate).toISOString();
-      } else {
-        params.range = filters.range;
-      }
-      const res = await telemetryService.getAnalyticsSummary(params);
+      const res = await telemetryService.getAnalyticsSummary(windowParams());
       setSummary(res.data || {});
     } catch (e) {
       console.error('Failed to fetch summary', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch machine time breakdown (cutting / air / paused / setup)
+  const fetchBreakdown = async () => {
+    try {
+      setLoadingBreakdown(true);
+      const res = await telemetryService.getBreakdown(windowParams());
+      setBreakdown(res.data || null);
+    } catch (e) {
+      console.error('Failed to fetch breakdown', e);
+      setBreakdown(null);
+    } finally {
+      setLoadingBreakdown(false);
     }
   };
 
@@ -209,6 +325,7 @@ function PublicAnalytics() {
       const params = { ...machineParams(), range: '-30d' };
       telemetryService.getAnalyticsSummary(params).then(res => setSummary(res.data || {}));
       telemetryService.getMachineMatrix(params).then(res => setMachineMatrix(res.data || []));
+      telemetryService.getBreakdown(params).then(res => setBreakdown(res.data || null)).catch(() => setBreakdown(null));
     } else if (selectedTab === 'table') {
       telemetryService.getRawTelemetry({ ...machineParams(), limit: 100, range: '-30d' }).then(response => {
         setRawData(response.data || []);
@@ -223,6 +340,7 @@ function PublicAnalytics() {
     if (selectedTab === 'summary') {
       fetchSummary();
       fetchMachineMatrix();
+      fetchBreakdown();
     } else if (selectedTab === 'table') {
       fetchTelemetry();
     }
@@ -285,6 +403,7 @@ function PublicAnalytics() {
       initializedTabs.current.add('summary');
       fetchSummary();
       fetchMachineMatrix();
+      fetchBreakdown();
     }
     if (selectedTab === 'table' && !initializedTabs.current.has('table')) {
       initializedTabs.current.add('table');
@@ -316,6 +435,7 @@ function PublicAnalytics() {
       initializedTabs.current.add('summary');
       fetchSummary();
       fetchMachineMatrix();
+      fetchBreakdown();
     } else if (selectedTab === 'table') {
       initializedTabs.current.add('table');
       fetchTelemetry();
@@ -462,6 +582,8 @@ function PublicAnalytics() {
       {/* ═══════════════════ SUMMARY TAB ═══════════════════ */}
       {selectedTab === 'summary' && (
         <>
+          <MachineBreakdown data={breakdown} loading={loadingBreakdown} fmtDur={formatDuration} />
+
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <FiRefreshCw className="animate-spin" size={24} /> Loading analytics summary...

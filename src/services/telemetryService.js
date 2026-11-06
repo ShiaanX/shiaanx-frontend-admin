@@ -23,6 +23,7 @@ const telemetryService = {
     return `${baseUrl}/public/telemetry/export?${query}`;
   },
   getAnalyticsSummary: async (params = {}) => api.get('/public/telemetry/analytics/summary', { params }),
+  getBreakdown: async (params = {}) => api.get('/public/telemetry/analytics/breakdown', { params }),
   getSpindleTrend: async (params = {}) => api.get('/public/telemetry/analytics/spindle-trend', { params }),
   getMachineMatrix: async (params = {}) => api.get('/public/telemetry/analytics/machine-matrix', { params }),
   getProgramMetrics: async (params = {}) => api.get('/public/telemetry/analytics/program-metrics', { params }),
