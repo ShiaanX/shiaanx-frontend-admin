@@ -3,13 +3,14 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Icon from '../icons';
 import KpiStrip from '../components/KpiStrip';
 import { useProtoData } from '../ProtoDataContext';
-import { programImageUrl, openV3Console, isLocalHost } from '../cappApi';
+import { programImageUrl, openV3Console, CONSOLE_HELP } from '../cappApi';
 import { useCappJob, partKeyOf } from '../cappJobStore';
 import { CappError, Spinner, show, fmtNum } from '../components/capp/CappCommon';
 import {
   useProgram, useApproveProgram, programFacts, dirLabel, toolName, fmtMin, holdingOf, billetOf, liveSetupFor,
   Planning, FlowSteps, ApprovedLine,
 } from '../components/capp/ProgramCard';
+import V3RunSync from '../components/capp/V3RunSync';
 import '../components/capp/program.css';
 
 // The full AI process plan & CAM program for one part of an order (#/proto/program/:orderId/:partIdx):
@@ -37,16 +38,16 @@ export default function ProgramPage() {
       <div className="detail-head">
         <div>
           <div className="detail-title"><h1>{part.name} — process plan &amp; CAM program</h1></div>
-          <div className="page-sub" style={{ marginTop: 2 }}>{row.orderId || row.id} · {row.customer} · qty {part.qty || 1} · {part.material || '—'} · AI planner v3</div>
+          <div className="page-sub" style={{ marginTop: 2 }}>{row.orderId || row.id} · {row.customer} · qty {part.qty || 1} · {part.material || '—'}</div>
         </div>
       </div>
     </>
   );
   if (!jobId) {
-    return <div>{head}<div className="card"><p style={{ margin: 0 }}>No analysis run for this part yet. <Link to={`/proto/enquiries/${row.uuid}`}>Run it on the attached STEP from the enquiry →</Link></p></div></div>;
+    return <div>{head}<div className="card"><p style={{ margin: 0 }}>No plan has been started for this part yet. <Link to={`/proto/enquiries/${row.uuid}`}>Run it on the attached STEP from the enquiry →</Link></p></div></div>;
   }
   if (!asked) {
-    return <div>{head}<div className="card cx"><button type="button" className="btn px-btn-primary" onClick={generate}><Icon name="cam" size={14} /> Generate with AI (v3)</button></div></div>;
+    return <div>{head}<div className="card cx"><button type="button" className="btn px-btn-primary" onClick={generate}><Icon name="cam" size={14} /> Generate with AI</button></div></div>;
   }
   const p = res.data;
   if (!p) return <div>{head}<div className="card cx">{res.error ? <CappError message={res.error} onRetry={res.reload} /> : <Planning res={res} />}</div></div>;
@@ -92,13 +93,15 @@ export default function ProgramPage() {
           <FlowSteps generated={setups.length > 0} approved={!!approved} scheduled={scheduled} />
           <div className="pg-actions" style={{ marginTop: 0 }}>
             <ApprovedLine approved={approved} />
-            {isLocalHost() && <button type="button" className="btn btn-ghost" onClick={openV3Console} data-program-console>Open v3 console (drives PowerMill) ↗</button>}
+            <button type="button" className="btn btn-ghost" onClick={openV3Console} data-program-console>Open ShiaanX planner console (PowerMill) ↗</button>
             {!approved && <button type="button" className="btn px-btn-primary" disabled={!!busy} onClick={() => approve(p)} data-program-approve><Icon name="quality" size={14} /> {busy ? 'Approving…' : 'Approve plan'}</button>}
             {approved && <Link className="btn px-btn-primary" to={`/proto/board?focus=${encodeURIComponent(part.uuid || part.name)}`}>See it on the production board →</Link>}
           </div>
         </div>
+        <div className="cell-sub" style={{ marginTop: 6 }} data-program-console-help>{CONSOLE_HELP}</div>
         {busy && <div className="cx-state" style={{ marginTop: 10 }}><Spinner /> {busy}</div>}
         {error && <div style={{ marginTop: 10 }}><CappError message={error} /></div>}
+        <V3RunSync jobId={jobId} partName={part.name} live={live} onDone={res.reload} />
         <KpiStrip style={{ marginTop: 14 }} items={[
           { n: setups.map(s => dirLabel(s.dir)).join(' / ') || '—', l: `${setups.length} setup${setups.length === 1 ? '' : 's'}` },
           { n: tools.length || '—', l: 'Tools' },

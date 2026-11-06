@@ -78,3 +78,4 @@
 .proto-app .dv-verdict .chip.warn b { color: var(--warn-ink); }
 .proto-app .dv-more { margin-top: 12px; }
 .proto-app .dv-more > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); padding: 4px 0; }
+.proto-app .dv-size-chip { position: absolute; left: 12px; bottom: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.94); border: 1px solid #1d4ed8; color: #1e3a8a; font-weight: 700; font-size: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); pointer-events: none; }

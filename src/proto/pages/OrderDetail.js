@@ -26,6 +26,8 @@ export default function OrderDetail() {
   const [showUpdate, setShowUpdate] = useState(false);
   const [picker, setPicker] = useState(null); // 'add' | 'repeat'
   const planTop = useRef(false);
+  const [reverting, setReverting] = useState(false);
+  const [revertError, setRevertError] = useState('');
   if (!r) return <div className="empty-hint">Order not found.</div>;
   // Parts left out when the enquiry was converted stay on the job but are not being made, so the
   // stage, the delivery check and the production cards only look at the ordered ones.
@@ -33,8 +35,27 @@ export default function OrderDetail() {
   const notOrdered = r.parts.filter(p => !isOrdered(p));
   const revert = () => {
     if (!window.confirm(`Turn ${r.orderId} back into enquiry ${r.id}? Nothing uploaded is deleted, and converting again later brings this order back.`)) return;
-    revertToEnquiry(r).then(id => navigate(`/proto/enquiries/${id}`)).catch(() => {});
+    // Can take a while on the server. While it runs the button says so and is off, so it cannot be
+    // pressed again; an error is shown here, not swallowed. "Already an enquiry" counts as done
+    // (ProtoDataContext.revertToEnquiry).
+    setReverting(true); setRevertError('');
+    revertToEnquiry(r)
+      .then(id => navigate(`/proto/enquiries/${id}`))
+      .catch(e => { setRevertError((e && e.message) || 'Could not revert this order to an enquiry.'); setReverting(false); });
   };
+  // Final PO value: what the person saved, else the sum of the finalized quote totals of the ordered
+  // parts (Auto-quote -> Finalize: data.edits.total_inr, or the quote's own total).
+  const quoteTotalOf = (p) => {
+    const aq = p.autoQuote;
+    if (!aq || aq.status !== 'FINALIZED' || !aq.data) return null;
+    const e = aq.data.edits && Number(aq.data.edits.total_inr);
+    if (Number.isFinite(e) && e > 0) return e;
+    const q = aq.data.quote && aq.data.quote.cost && Number(aq.data.quote.cost.total_inr);
+    return Number.isFinite(q) && q > 0 ? q : null;
+  };
+  const quoteTotals = ordered.map(quoteTotalOf).filter(v => v !== null);
+  const poFromQuote = quoteTotals.length ? `₹${Math.round(quoteTotals.reduce((a, b) => a + b, 0)).toLocaleString('en-IN')}` : '';
+  const poShown = r.poValue || poFromQuote;
   // The Production Board's statuses plus Delivered; an order sits at the stage of its least-advanced
   // piece. Delivered is the server's call (r.status), made when every piece has been delivered.
   const delivered = r.status === 'DELIVERED';
@@ -79,10 +100,10 @@ export default function OrderDetail() {
           )}
           <button type="button" className="btn btn-ghost" onClick={() => setShowUpdate(true)}><Icon name="upload" size={14} /> Update</button>
           <button type="button" className="btn btn-ghost" onClick={() => setPicker('repeat')} data-repeat-order><Icon name="knowledge" size={14} /> Repeat order</button>
-          <button type="button" className="btn btn-ghost" onClick={revert}><Icon name="back" size={14} /> Revert to enquiry</button>
-          <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
+          <button type="button" className="btn btn-ghost" onClick={revert} disabled={reverting}><Icon name="back" size={14} /> {reverting ? 'Reverting…' : 'Revert to enquiry'}</button>
         </div>
       </div>
+      {revertError && <div className="error-banner" role="alert" data-revert-error><span>{revertError}</span><button type="button" className="btn-text" onClick={() => setRevertError('')}>Dismiss</button></div>}
       {planCardTop && <ProgramCard row={r} prominent={planningNow} />}
       <div className="grid2">
         <div>
@@ -95,8 +116,9 @@ export default function OrderDetail() {
               <dt>Deadline</dt><dd>{fmtDate(r.deadline)}</dd>
             </dl>
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="field"><label>Final PO value</label><input key={`po-${r.poValue}`} defaultValue={r.poValue || ''} placeholder="₹ e.g. 84,500"
-                onBlur={e => { if (e.target.value !== (r.poValue || '')) patchEnquiry(r, { poValue: e.target.value }).catch(() => {}); }} /></div>
+              <div className="field"><label>Final PO value</label><input key={`po-${r.poValue}-${poFromQuote}`} defaultValue={poShown} placeholder="₹ e.g. 84,500"
+                onBlur={e => { if (e.target.value !== poShown) patchEnquiry(r, { poValue: e.target.value }).catch(() => {}); }} />
+                {!r.poValue && poFromQuote && <span className="cell-sub" data-po-hint>from the finalized quote, editable</span>}</div>
               <div className="field"><label>Remarks</label><textarea key={`rm-${r.remarks}`} defaultValue={r.remarks || ''} placeholder="Notes about this order…"
                 onBlur={e => { if (e.target.value !== (r.remarks || '')) patchEnquiry(r, { remarks: e.target.value }).catch(() => {}); }} /></div>
             </div>
@@ -123,7 +145,7 @@ export default function OrderDetail() {
             </div>
           )}
           <ArtifactChecklist jobId={r.orderId} row={r} hasOrder />
-          <ComplaintsCard row={r} />
+          {delivered && <ComplaintsCard row={r} />}
         </div>
         <div>
           <DocumentsReceived row={r} />
@@ -131,7 +153,7 @@ export default function OrderDetail() {
         </div>
       </div>
       {!planCardTop && <ProgramCard row={r} />}
-      <LiveAnalysisCard title="Production tracking — program, previous batches and QC" parts={ordered.length ? ordered : r.parts} panels={['tracking']} />
+      <LiveAnalysisCard title="Production tracking — program, previous batches and QC" parts={ordered.length ? ordered : r.parts} panels={['tracking']} runLabel="Load this part's production data" />
       {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
       {picker === 'add' && (
         <PartPickerModal

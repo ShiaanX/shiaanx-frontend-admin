@@ -17,6 +17,7 @@ import Settings from './pages/Settings';
 import View3D from './pages/View3D';
 import Complaints from './pages/Complaints';
 import ProgramPage from './pages/ProgramPage';
+import AutoPlanner from './components/capp/AutoPlanner';
 
 const NAV = [
   { to: '/proto', end: true, icon: 'base', label: 'Enquiries & Orders', crumb: 'Sales / Enquiries & Orders' },
@@ -127,6 +128,7 @@ export default function ProtoApp() {
   return (
     <ProtoDataProvider>
       <Gate>
+      <AutoPlanner />
       <Shell>
         <Routes>
           <Route index element={<EnquiriesOrders />} />

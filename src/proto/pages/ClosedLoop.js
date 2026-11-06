@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
+import { useProtoData } from '../ProtoDataContext';
 import Icon from '../icons';
 import KpiStrip from '../components/KpiStrip';
 import { QcBadge, QcPillGroup, ConfidenceBadge } from '../components/Badges';
@@ -9,6 +10,27 @@ import DefectsWhy from '../components/DefectsWhy';
 import MOTOR_MOUNT_CLOSED_LOOP from '../demoData/motorMountClosedLoop';
 
 const DEFAULT_PART = 'PN-1052';
+
+// "← Back" (browser history; the Closed loop summary when this page was opened directly) and, when the
+// page was opened for an order (?order=<order id or uuid>) or the part on screen is on one, a link to
+// that order. `partName` is matched against the parts of orders when no ?order= was given.
+function BackBar({ partName }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [search] = useSearchParams();
+  const { rows } = useProtoData();
+  const want = search.get('order');
+  const slug = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const order = (want && rows.find(r => r.isOrder && (r.uuid === want || r.orderId === want || r.id === want)))
+    || (partName && rows.find(r => r.isOrder && r.parts.some(p => slug(p.name) === slug(partName))));
+  const back = () => { if (location.key !== 'default') navigate(-1); else navigate('/proto/closed-loop'); };
+  return (
+    <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }} data-cl-back>
+      <button type="button" className="back-link" style={{ marginBottom: 0 }} onClick={back}><Icon name="back" /> Back</button>
+      {order && <Link className="back-link" style={{ marginBottom: 0 }} to={`/proto/orders/${order.uuid}`} data-cl-order>Open order {order.orderId || order.id} →</Link>}
+    </div>
+  );
+}
 const LIST_STYLE = { margin: 0, paddingLeft: 20, fontSize: 13.5, display: 'flex', flexDirection: 'column', gap: 8 };
 
 function num(v) {
@@ -197,6 +219,7 @@ export default function ClosedLoop() {
     const batch = search.get('batch') || 'run1';
     return (
       <div>
+        <BackBar partName={MOTOR_MOUNT_CLOSED_LOOP.part} />
         <div className="page-head"><div><h1>Closed Loop</h1><div className="page-sub">Each dimension QC measured on {MOTOR_MOUNT_CLOSED_LOOP.part}, linked to the toolpath and tool that cut it, with the likely cause. Graded and linked from the real inspection reports, NC programs and CAD.</div></div></div>
         <ViewTabs view={view} setView={setView} />
         <DefectsWhy data={MOTOR_MOUNT_CLOSED_LOOP} runId={batch}
@@ -208,6 +231,7 @@ export default function ClosedLoop() {
 }
 
 function ClosedLoopReport({ tabs }) {
+  const params = useParams();
   const [real, setReal] = useState(null); // null checking, true present, false absent
   useEffect(() => {
     let dead = false;
@@ -223,6 +247,7 @@ function ClosedLoopReport({ tabs }) {
   if (real) {
     return (
       <div>
+        {params.partId && <BackBar />}
         <div className="page-head">
           <div><h1>Closed Loop</h1><div className="page-sub">The closed-loop report as generated from the machine telemetry, CAM plan and QC.</div></div>
           <div className="head-actions"><a className="btn btn-ghost" href={REPORT_URL} target="_blank" rel="noreferrer">Open in a new tab</a></div>
@@ -258,6 +283,7 @@ function ClosedLoopSummary({ tabs: viewTabs }) {
 
   return (
     <div>
+      {params.partId && <BackBar partName={cl.name} />}
       <div className="page-head">
         <div><h1>Closed Loop</h1><div className="page-sub">A simplified summary of the closed-loop data. The full report, with its hover explanations and detail, shows here once it is synced in on this computer.</div></div>
         <div className="head-actions">

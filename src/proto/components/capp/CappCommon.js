@@ -63,7 +63,7 @@ export function Spinner() { return <div className="cx-spin" />; }
 export function CappError({ message, onRetry }) {
   return (
     <div className="cx-err" role="alert">
-      <b>Part-analysis service error</b>
+      <b>Could not complete this</b>
       <pre>{message}</pre>
       {onRetry && <button type="button" className="btn-sm ghost" onClick={onRetry}>Retry</button>}
     </div>

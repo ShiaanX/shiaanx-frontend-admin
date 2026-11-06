@@ -15,7 +15,7 @@ const PANELS = {
 
 // One card holding the live CAPP run for a job's parts and the panels that read from it.
 // `panels` picks which (e.g. ['dfm','reply'] at the enquiry, ['tracking'] on an order).
-export default function LiveAnalysisCard({ title, parts, panels, onQuote }) {
+export default function LiveAnalysisCard({ title, parts, panels, onQuote, runLabel }) {
   const [pi, setPi] = useState(0);
   const [tab, setTab] = useState(panels[0]);
   const part = parts[Math.min(pi, parts.length - 1)];
@@ -37,7 +37,7 @@ export default function LiveAnalysisCard({ title, parts, panels, onQuote }) {
           {onQuote && <button type="button" className="btn-sm primary" onClick={() => onQuote(parts.indexOf(part))}><Icon name="quote" size={12} /> Open auto-quote</button>}
         </div>
       </div>
-      <CappJobRunner key={part.tmpl || part.name} part={part}>
+      <CappJobRunner key={part.tmpl || part.name} part={part} runLabel={runLabel}>
         {(jobId, job) => {
           const Panel = PANELS[tab][1];
           return (

@@ -1,10 +1,10 @@
 import { CYCLE_TIME_LIBRARY } from '../demoData/cycleTimes';
 
-// Shop calendar for the "where this job slots in" schedule. One shift on one VMC: every in-house
+// Shop calendar for the "where this job slots in" schedule. One 12-hour shift on one VMC: every in-house
 // job on the board queues for the same machine.
 export const VMC_COUNT = 1;
-export const SHIFT_START_HOUR = 9;          // 09:00
-export const HOURS_PER_DAY = 8;             // one 8-hour shift
+export const SHIFT_START_HOUR = 8;          // 08:00-20:00
+export const HOURS_PER_DAY = 12;            // one 12-hour shift
 export const WORKING_DAYS = [1, 2, 3, 4, 5, 6]; // Mon–Sat (0 = Sunday)
 // Changeover per setup per batch (load fixture, touch off, prove out). Assumption, not measured;
 // matches the auto-quote's default setupTimePerSetupMin.
@@ -109,10 +109,17 @@ export function addWorkingMinutes(t, minutes) {
   return x;
 }
 
+export const queueRankOf = (j) => { const d = j.autoQuote && j.autoQuote.data; const q = d && d.queueRank !== null && d.queueRank !== undefined ? Number(d.queueRank) : NaN; return Number.isFinite(q) ? q : null; };
+// Ranked jobs first (lowest rank first), then the ones with no rank.
+const compareRank = (a, b) => { const x = queueRankOf(a); const y = queueRankOf(b); if (x === null && y === null) return 0; if (x === null) return 1; if (y === null) return -1; return x - y; };
+
 // Orders the board's queued jobs for the machine and gives each a start and finish.
 export function buildSchedule(jobs, now = new Date()) {
   const queued = jobs.filter(j => j.tag === 'inhouse' && QUEUED_STAGES.includes(j.status)).slice().sort((a, b) =>
     STAGE_ORDER[a.status] - STAGE_ORDER[b.status]
+    // Manual order within a stage (drag / arrows in the Scheduled column). STOPGAP until a proper
+    // queue_rank column exists on enquiry_parts: the rank lives in part.autoQuote.data.queueRank.
+    || compareRank(a, b)
     || String(a.deadline || '9999').localeCompare(String(b.deadline || '9999'))
     || String(a.orderDate || '').localeCompare(String(b.orderDate || ''))
     || String(a.projectNo).localeCompare(String(b.projectNo))
@@ -134,3 +141,34 @@ export function buildSchedule(jobs, now = new Date()) {
 export const fmtWhen = (d) => (d ? d.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 export const fmtDay = (d) => (d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—');
 export const fmtHours = (m) => (m === null || m === undefined ? '—' : `${(m / 60).toFixed(1)} h`);
+
+// Working minutes of machine time between two instants on the shift calendar.
+function workingMinutesBetween(a, b) {
+  if (!(b > a)) return 0;
+  let total = 0;
+  let x = new Date(a);
+  x.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 400 && x < b; i += 1) {
+    if (isWorkDay(x)) {
+      const from = Math.max(a.getTime(), dayStart(x).getTime());
+      const to = Math.min(b.getTime(), dayEnd(x).getTime());
+      if (to > from) total += (to - from) / 60000;
+    }
+    x = new Date(x); x.setDate(x.getDate() + 1);
+  }
+  return total;
+}
+
+// How long a new job waits for the machine: working days from `now` until the jobs already cutting or
+// scheduled (PRODUCTION, SCHEDULING) are done, on the same schedule the board uses. `partial` is true
+// when a job ahead has no time estimate (it cannot be counted, so the real wait may be longer).
+// Returns { days, readyAt, partial }.
+export function queueWaitDays(jobs, now = new Date()) {
+  const ahead = (jobs || []).filter(j => j.status === 'PRODUCTION' || j.status === 'SCHEDULING');
+  const sched = buildSchedule(ahead, now);
+  const partial = sched.some(r => r.finish === null);
+  const last = sched.reduce((m, r) => (r.finish && (!m || r.finish > m) ? r.finish : m), null);
+  if (!last) return { days: 0, readyAt: nextWorkingInstant(now), partial };
+  const mins = workingMinutesBetween(nextWorkingInstant(now), last);
+  return { days: Math.ceil(mins / (HOURS_PER_DAY * 60) - 1e-9), readyAt: last, partial };
+}

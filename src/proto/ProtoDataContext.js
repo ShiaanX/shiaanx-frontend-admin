@@ -63,6 +63,7 @@ export function ProtoDataProvider({ children }) {
   // {error} if it failed.
   const [artifactProgress, setArtifactProgress] = useState({});
   const busy = useRef(0);
+  const rowsRef = useRef([]); // always the latest rows, for actions that run after an await
 
   const onAuthLost = useCallback(() => { apiLogout(); setAuthed(false); setData(null); }, []);
 
@@ -119,6 +120,7 @@ export function ProtoDataProvider({ children }) {
   const logout = useCallback(() => onAuthLost(), [onAuthLost]);
 
   const rows = data ? data.rows.map(withStages) : [];
+  rowsRef.current = rows;
   const findRow = (id) => rows.find(r => r.uuid === id || r.id === id);
   const rowForJob = (jobId) => rows.find(r => r.id === jobId || r.orderId === jobId || r.uuid === jobId);
   const customers = data ? data.customers : [];
@@ -185,7 +187,19 @@ export function ProtoDataProvider({ children }) {
     await run(() => call('POST', `/enquiries/${r.uuid}/convert`, { json: partIds ? { partIds } : {} }));
     return r.uuid;
   };
-  const revertToEnquiry = async (row) => { await run(() => call('POST', `/enquiries/${row.uuid}/revert`)); return row.uuid; };
+  // A revert can take long enough for the browser to give up while the server still finishes it, and
+  // a retry is then answered "This enquiry is not an order" (HTTP 400). That means it is already an
+  // enquiry again, so it counts as done.
+  const revertToEnquiry = async (row) => {
+    try {
+      await run(() => call('POST', `/enquiries/${row.uuid}/revert`));
+    } catch (e) {
+      if (!/not an order/i.test((e && e.message) || '')) throw e;
+      setActionError('');
+      refresh();
+    }
+    return row.uuid;
+  };
   // Adds parts left out at Convert to the order.
   const addPartsToOrder = (row, partIds) => run(() => call('POST', `/enquiries/${row.uuid}/order-parts`, { json: { partIds } }));
   // Repeat order: a new enquiry <original>_R<n> with the chosen parts and copies of their files.
@@ -249,8 +263,9 @@ export function ProtoDataProvider({ children }) {
   const saveAutoQuote = (rowId, partIndex, d, finalize) => {
     const r = findRow(rowId);
     const prev = r.parts[partIndex].autoQuote;
-    const aiPlan = prev && prev.data && prev.data.aiPlan;
-    const data = aiPlan && !(d && d.aiPlan) ? { ...d, aiPlan } : d;
+    // Keys kept beside the quote (saveApprovedPlan, saveQueueRank, saveCappJobLink) survive a re-save.
+    const data = { ...d };
+    ['aiPlan', 'queueRank', 'cappJob'].forEach(k => { if (prev && prev.data && prev.data[k] !== undefined && !(d && d[k] !== undefined)) data[k] = prev.data[k]; });
     return run(() => call('PATCH', `/parts/${r.parts[partIndex].uuid}`, { json: { autoQuote: { data, status: finalize ? 'FINALIZED' : 'DRAFT' } } })).catch(() => {});
   };
 
@@ -266,6 +281,24 @@ export function ProtoDataProvider({ children }) {
     const data = { ...((prev && prev.data) || { _source: 'ai_plan' }), aiPlan };
     return run(() => call('PATCH', `/parts/${p.uuid}`, { json: { autoQuote: { data, status: (prev && prev.status) || 'DRAFT' } } }));
   };
+
+  // Merges `extra` into the part's autoQuote.data and saves it, leaving every other key (aiPlan, edits,
+  // quote, ...) and the quote status as they are. Reads the latest rows, so it is safe after an await.
+  // Stopgap store: the flow API has no per-part column for these yet (see the notes beside each caller).
+  const mergeAutoQuoteData = (rowId, partIndex, extra) => {
+    const r = rowsRef.current.find(x => x.uuid === rowId || x.id === rowId);
+    const p = r && r.parts[partIndex];
+    if (!p) return Promise.resolve();
+    const prev = p.autoQuote || null;
+    const data = { ...((prev && prev.data) || { _source: 'ai_plan' }), ...extra };
+    return run(() => call('PATCH', `/parts/${p.uuid}`, { json: { autoQuote: { data, status: (prev && prev.status) || 'DRAFT' } } }));
+  };
+  // Position of a part in the Scheduled column of the Production Board (lower = earlier on the machine).
+  // STOPGAP until a proper queue_rank column exists on enquiry_parts: kept inside autoQuote.data.
+  const saveQueueRank = (rowId, partIndex, queueRank) => mergeAutoQuoteData(rowId, partIndex, { queueRank });
+  // The planning job started for a part, so every browser finds it (otherwise it is only remembered in
+  // the browser that started it). Stopgap: the flow API's PATCH /parts/:id cannot set capp_job_id.
+  const saveCappJobLink = (rowId, partIndex, cappJob) => mergeAutoQuoteData(rowId, partIndex, { cappJob });
 
   // A manual quote — an Excel sheet or PDF made outside the auto-quote tool.
   const uploadManualQuote = (rowId, file) => {
@@ -395,7 +428,7 @@ export function ProtoDataProvider({ children }) {
     addPartsToOrder, repeatEnquiry,
     addComplaint, updateComplaint, addComplaintAttachments, removeComplaint,
     patchEnquiry, setPartStatus, applyEnquiryUpdate,
-    getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote, saveApprovedPlan,
+    getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote, saveApprovedPlan, saveQueueRank, saveCappJobLink,
     settings, saveSetting, removeSetting, patchPartLibrary,
     generateProcessPlan, artifactProgress, addOtherDocument, removeOtherDocument,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile, fetchFile,

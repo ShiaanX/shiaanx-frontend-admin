@@ -41,7 +41,7 @@ const STATUS_CLS = { COMPLETE: 'b-done', FAILED: 'b-fail', RUNNING: 'b-inprogres
 // Runs the live CAPP pipeline for one part and remembers the job id against it. The STEP comes from
 // the part's attached CAD file when it has one; a STEP can always be picked from disk instead.
 // Renders `children(jobId, job)` once there is a job.
-export default function CappJobRunner({ part, children }) {
+export default function CappJobRunner({ part, children, runLabel = 'Click here for DFM' }) {
   const { fetchFile } = useProtoData();
   const partKey = partKeyOf(part);
   const { entry, setEntry } = useCappJob(partKey);
@@ -54,10 +54,10 @@ export default function CappJobRunner({ part, children }) {
   const fileInput = useRef(null);
 
   const start = async (blob, name) => {
-    setBusy(`Sending ${name} to the v3 planner…`); setError('');
+    setBusy(`Sending ${name} for the manufacturability check…`); setError('');
     try {
       const out = await createCappJob(blob, name, part.name, cappMaterialOf(part.material));
-      if (!out || !out.job_id) throw new Error('Part-analysis service did not return a job id');
+      if (!out || !out.job_id) throw new Error('The analysis service did not return a reference for this file');
       setEntry({ jobId: out.job_id, fileName: name });
     } catch (e) { setError(e.message || String(e)); }
     finally { setBusy(''); }
@@ -80,12 +80,12 @@ export default function CappJobRunner({ part, children }) {
   const actions = (
     <div className="cx-runner">
       <input ref={fileInput} type="file" accept=".step,.stp,.STEP,.STP" style={{ display: 'none' }} onChange={onPicked} />
-      {part.fileKey && <button type="button" className="btn-sm primary" disabled={!!busy} onClick={runAttached}>{jobId ? 'Re-run on attached STEP' : 'Run on attached STEP'}</button>}
+      {part.fileKey && <button type="button" className="btn-sm primary" disabled={!!busy} onClick={runAttached}>{jobId ? 'Re-run on the attached STEP' : runLabel}</button>}
       <button type="button" className={`btn-sm ${part.fileKey ? 'ghost' : 'primary'}`} disabled={!!busy} onClick={() => fileInput.current.click()}>
-        <Icon name="upload" size={13} /> {part.fileKey ? 'Choose STEP from disk' : (jobId ? 'Re-run with a STEP from disk' : 'Choose STEP file to analyse')}
+        <Icon name="upload" size={13} /> {part.fileKey ? 'Choose STEP from disk' : (jobId ? 'Re-run with a STEP from disk' : 'Choose a STEP file')}
       </button>
-      <button type="button" className="btn-sm text" onClick={() => setShowLink(s => !s)}>Use an existing job id</button>
-      {jobId && <button type="button" className="btn-sm text" onClick={() => setEntry(null)}>Forget job</button>}
+      <button type="button" className="btn-sm text" onClick={() => setShowLink(s => !s)}>Use an existing reference</button>
+      {jobId && <button type="button" className="btn-sm text" onClick={() => setEntry(null)}>Forget</button>}
     </div>
   );
 
@@ -93,20 +93,20 @@ export default function CappJobRunner({ part, children }) {
     <div className="cx">
       {jobId ? (
         <div className="cx-jobline" style={{ marginBottom: 10 }}>
-          <span>Analysis job <b className="mono">{jobId.slice(0, 8)}</b></span>
+          <span>Reference <b className="mono">{jobId.slice(0, 8)}</b></span>
           {entry.fileName && <span>STEP <b>{entry.fileName}</b></span>}
           {status && <span className={`badge ${STATUS_CLS[status] || 'b-quoted'}`}>{status === 'COMPLETE' ? 'Upload processed' : status === 'FAILED' ? 'Upload processing failed' : `Running · ${job.stage_name || 'queued'}`}</span>}
           {!status && !pollError && <span className="badge b-neutral">Checking…</span>}
         </div>
       ) : (
         <p className="page-sub" style={{ margin: '0 0 10px', fontSize: 14 }}>
-          Run the part's STEP through the v3 planner. DFM, quote and the reply assistant all read from that run.
+          Click below to check the part's manufacturability from its STEP file. The quote and the client reply drafts use the same check.
         </p>
       )}
       {actions}
       {showLink && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <div className="field" style={{ flex: 1 }}><input value={linkId} onChange={e => setLinkId(e.target.value)} placeholder="capp_service job id (uuid)" /></div>
+          <div className="field" style={{ flex: 1 }}><input value={linkId} onChange={e => setLinkId(e.target.value)} placeholder="reference id (uuid)" /></div>
           <button type="button" className="btn-sm ghost" disabled={!linkId.trim()} onClick={() => { setEntry({ jobId: linkId.trim(), fileName: '' }); setShowLink(false); setLinkId(''); }}>Use</button>
         </div>
       )}

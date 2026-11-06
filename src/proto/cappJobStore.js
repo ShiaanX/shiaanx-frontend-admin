@@ -37,3 +37,23 @@ export function useCappJob(partKey) {
   }, [partKey]);
   return { entry, setEntry: (e) => setCappJobFor(partKey, e) };
 }
+
+// What the automatic planner (components/capp/AutoPlanner.js) is doing for a part, by part key:
+// { state: 'starting' | 'started' | 'error', text } — shown on the Process plan card. In memory only.
+const autoStates = new Map();
+const autoListeners = new Set();
+export function setAutoState(partKey, st) {
+  if (!partKey) return;
+  if (st) autoStates.set(partKey, st); else autoStates.delete(partKey);
+  autoListeners.forEach(fn => fn(partKey));
+}
+export function useAutoState(partKey) {
+  const [st, setSt] = useState(() => autoStates.get(partKey) || null);
+  useEffect(() => {
+    setSt(autoStates.get(partKey) || null);
+    const fn = (k) => { if (k === partKey) setSt(autoStates.get(partKey) || null); };
+    autoListeners.add(fn);
+    return () => { autoListeners.delete(fn); };
+  }, [partKey]);
+  return st;
+}

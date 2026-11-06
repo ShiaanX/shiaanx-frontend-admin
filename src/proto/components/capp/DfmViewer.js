@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { FiChevronRight, FiAlertTriangle, FiInfo } from 'react-icons/fi';
 import { cappStepUrl } from '../../cappApi';
 import { loadStepFaces } from './dfmStepLoader';
+import { setDfmSnapshot, setDfmSize } from './dfmSnapshotStore';
 import './dfmViewer.css';
 
 // 3D DFM viewer: the job's STEP rendered with its B-rep faces coloured by DFM issue category, next to
@@ -24,6 +25,27 @@ const VIEWS = [
   ['front', 'Front', [0, -1, 0]],
   ['iso', 'ISO', [1, -1, 0.8]],
 ];
+const AXIS_COL = ['#dc2626', '#16a34a', '#2563eb'];
+const fmtDim = (v) => (Math.round(v * 10) / 10).toString();
+// A text label that always faces the camera, drawn over the model (no depth test) so it stays readable.
+function labelSprite(text, color, worldH) {
+  const cv = document.createElement('canvas');
+  cv.width = 320; cv.height = 96;
+  const g = cv.getContext('2d');
+  g.fillStyle = 'rgba(255,255,255,0.94)';
+  g.strokeStyle = color; g.lineWidth = 6;
+  g.beginPath();
+  if (g.roundRect) g.roundRect(4, 4, 312, 88, 18); else g.rect(4, 4, 312, 88);
+  g.fill(); g.stroke();
+  g.fillStyle = color; g.font = 'bold 44px system-ui, Arial, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, 160, 50);
+  const tex = new THREE.CanvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  sp.scale.set(worldH * (320 / 96), worldH, 1);
+  sp.renderOrder = 10;
+  return sp;
+}
 const ease = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
 const isHex = (c) => typeof c === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c.trim());
 const fmtVal = (v) => {
@@ -81,12 +103,14 @@ function buildModel(d) {
   return { cats, notes, hasCategories: !!raw, itemsByKey, faceItems, faceColor, maxFace, faceTotal };
 }
 
-export default function DfmViewer({ jobId, dfm }) {
+export default function DfmViewer({ jobId, dfm, onSize }) {
   const model = useMemo(() => buildModel(dfm), [dfm]);
   const viewRef = useRef(null);
   const canvasRef = useRef(null);
   const tipRef = useRef(null);
   const treeRef = useRef(null);
+  const onSizeRef = useRef(onSize);
+  onSizeRef.current = onSize;
   const t = useRef({ meshes: [], edges: [], faces: [], triFace: [], sphere: null, tween: null, hover: null });
 
   const [geo, setGeo] = useState({ loading: true, error: null, faces: null });
@@ -95,6 +119,7 @@ export default function DfmViewer({ jobId, dfm }) {
   const [sel, setSel] = useState(null); // {kind:'item',key} | {kind:'cat',ci} | {kind:'pick',keys,face}
   const [open, setOpen] = useState(() => new Set());
   const [hoverFace, setHoverFace] = useState(null);
+  const [showSize, setShowSize] = useState(false);
 
   // ---- parity --------------------------------------------------------------------------------
   const fc = dfm ? dfm.face_count : undefined;
@@ -339,7 +364,13 @@ export default function DfmViewer({ jobId, dfm }) {
       s.controls.minDistance = s.sphere.radius * 0.05;
       s.controls.maxDistance = s.sphere.radius * 40;
       flyTo(s.sphere.center, s.sphere.radius, new THREE.Vector3(...VIEWS[2][2]), false, 0.72);
-      setGeo({ loading: false, error: null, faces: s.faces.length });
+      const sz = bb.getSize(new THREE.Vector3());
+      s.bbox = bb.clone();
+      const size = [sz.x, sz.y, sz.z].map(v => Math.round(v * 10) / 10);
+      setDfmSize(jobId, size);
+      if (onSizeRef.current) onSizeRef.current(size);
+      s.snapLocked = false;
+      setGeo({ loading: false, error: null, faces: s.faces.length, size });
     }).catch((e) => {
       if (cancelled) return;
       console.error('DFM viewer: STEP load failed', e);
@@ -366,6 +397,49 @@ export default function DfmViewer({ jobId, dfm }) {
     s.meshes.forEach((m) => { m.geometry.attributes.color.needsUpdate = true; });
     s.edges.forEach((e) => { e.material.opacity = hasSel ? 0.2 : 0.32; });
   }, [geo.faces, colourOn, selFaces, showAll, model]);
+
+  // Picture for the quote PDF: ISO view, every issue coloured, taken in the same tick as a render
+  // (the canvas has no preserved buffer). Stops updating once the person touches the model.
+  useEffect(() => {
+    const s = t.current;
+    if (geo.faces === null || !s.meshes.length || s.snapLocked || s.tween) return;
+    try {
+      s.renderer.render(s.scene, s.camera);
+      setDfmSnapshot(jobId, s.renderer.domElement.toDataURL('image/png'));
+    } catch (e) { /* the PDF is made without the picture */ }
+  }, [geo.faces, colourOn, jobId]);
+
+  // "Show size": the part's bounding box with its X / Y / Z lengths in mm.
+  useEffect(() => {
+    const s = t.current;
+    if (!s.root) return undefined;
+    if (s.sizeGroup) {
+      s.root.remove(s.sizeGroup);
+      s.sizeGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+      s.sizeGroup = null;
+    }
+    if (!showSize || geo.faces === null || !s.bbox) return undefined;
+    const { min, max } = s.bbox;
+    const d = [max.x - min.x, max.y - min.y, max.z - min.z];
+    const grp = new THREE.Group();
+    grp.add(new THREE.Box3Helper(s.bbox, 0x1d4ed8));
+    const worldH = Math.max(s.sphere.radius * 0.16, 1);
+    const pad = worldH * 0.4;
+    // the three edges nearest the default ISO view (+X, -Y, +Z side)
+    const spots = [
+      new THREE.Vector3((min.x + max.x) / 2, min.y - pad, min.z),
+      new THREE.Vector3(max.x + pad, (min.y + max.y) / 2, min.z),
+      new THREE.Vector3(max.x + pad, min.y - pad, (min.z + max.z) / 2),
+    ];
+    ['X', 'Y', 'Z'].forEach((ax, i) => {
+      const sp = labelSprite(`${ax} ${fmtDim(d[i])} mm`, AXIS_COL[i], worldH);
+      sp.position.copy(spots[i]);
+      grp.add(sp);
+    });
+    s.sizeGroup = grp;
+    s.root.add(grp);
+    return undefined;
+  }, [showSize, geo.faces]);
 
   // frame the camera when an item or a category is chosen in the tree (not on a click on the model)
   useEffect(() => {
@@ -404,7 +478,7 @@ export default function DfmViewer({ jobId, dfm }) {
   }, [pickFace]);
 
   const down = useRef(null);
-  const onPointerDown = (e) => { down.current = { x: e.clientX, y: e.clientY, b: e.button }; };
+  const onPointerDown = (e) => { t.current.snapLocked = true; down.current = { x: e.clientX, y: e.clientY, b: e.button }; };
   const onPointerMove = (e) => {
     const s = t.current;
     if (e.buttons) { if (s.hover) s.hover.out = true; setHoverFace(null); return; }
@@ -514,6 +588,10 @@ export default function DfmViewer({ jobId, dfm }) {
               <button type="button" key={id} disabled={!ready} onClick={() => setView(dir)}>{name}</button>
             ))}
             <button type="button" disabled={!ready} onClick={fit} title="Fit the whole part in view">Fit</button>
+            <button type="button" className={showSize ? 'on' : ''} aria-pressed={showSize} disabled={!ready}
+              onClick={() => setShowSize(v => !v)} title="Draw the part's outer box with its length, width and height">
+              <span className={`dv-check ${showSize ? 'on' : ''}`} /> Show size
+            </button>
           </div>
           {model.faceTotal > 0 && (
             <div className="dv-grp" role="group" aria-label="Issues">
@@ -525,6 +603,10 @@ export default function DfmViewer({ jobId, dfm }) {
             </div>
           )}
         </div>
+
+        {ready && geo.size && (
+          <div className="dv-size-chip" data-dfm-size>Part size: {fmtDim(geo.size[0])} x {fmtDim(geo.size[1])} x {fmtDim(geo.size[2])} mm</div>
+        )}
 
         <div ref={tipRef} className="dv-tip" style={{ display: hoverItems.length ? '' : 'none' }}>
           {hoverItems.slice(0, 4).map(it => (
@@ -563,7 +645,7 @@ export default function DfmViewer({ jobId, dfm }) {
         </div>
         <div className="dv-tree" ref={treeRef}>
           {!model.hasCategories && (
-            <div className="dv-empty">This analysis has no face-level issue data, so nothing is marked on the model. The planner's findings are listed below.</div>
+            <div className="dv-empty">This analysis has no face-level issue data, so nothing is marked on the model. The machining plan's findings are listed below.</div>
           )}
           {model.hasCategories && model.cats.length === 0 && (
             <div className="dv-empty">No face-level issues found.</div>

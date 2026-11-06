@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProtoData } from '../ProtoDataContext';
 import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
-import SchedulePanel, { EstimateSource } from '../components/SchedulePanel';
-import { estimateFor, approvedPlansByPart, machineMinutes, fmtHours, buildSchedule, fmtDay, fmtWhen, MACHINE_SLOTS, MACHINE_NAME } from '../components/scheduleModel';
+import { EstimateSource } from '../components/SchedulePanel';
+import { estimateFor, approvedPlansByPart, machineMinutes, fmtHours, buildSchedule, queueRankOf, fmtDay, fmtWhen, MACHINE_SLOTS, MACHINE_NAME } from '../components/scheduleModel';
 
 const SELECT_STYLE = { border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--ink)', borderRadius: 8, padding: '8px 10px', fontSize: 12.5 };
 
@@ -18,16 +18,19 @@ const SELECT_STYLE = { border: '1px solid var(--border)', background: 'var(--car
 // ordered === false). A reverted or plain enquiry's parts can still carry an old stage, so the row
 // itself decides, not the part's stage.
 //
-// Clicking a card selects it (?focus=<part uuid>, or a part name such as ?focus=motor-mount) and
-// opens the schedule panel: the machine queue ahead of it and its computed start/finish
-// (components/SchedulePanel.js). The panel links on to the order.
+// Clicking a card highlights it (?focus=<part uuid>, or a part name such as ?focus=motor-mount). The
+// schedule panel (components/SchedulePanel.js) is no longer shown here; the dates are on the cards.
+//
+// Cards in the Scheduled column can be reordered, by dragging one onto another or with the arrow
+// buttons. The order is saved as a numeric queueRank per part (ProtoDataContext.saveQueueRank) and
+// buildSchedule sorts by it, so the dates on every card follow.
 // The two machine columns are named for the machine; the stage vocabulary underneath is unchanged.
 const COLUMN_LABEL = { SCHEDULING: 'Scheduled' };
 const COLUMN_SUB = { PRODUCTION: `on ${MACHINE_NAME}`, SCHEDULING: `for ${MACHINE_NAME}` };
 const slug = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 export default function ProductionBoard() {
-  const { rows, customers, setPartStatus } = useProtoData();
+  const { rows, customers, setPartStatus, saveQueueRank } = useProtoData();
   const navigate = useNavigate();
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
@@ -71,6 +74,28 @@ export default function ProductionBoard() {
   const focus = focusKey ? (allJobs.find(j => j.partUuid === focusKey || j.id === focusKey) || allJobs.find(j => slug(j.partName) === slug(focusKey))) : null;
   const setFocus = (j) => setSearch(prev => { const n = new URLSearchParams(prev); if (j) n.set('focus', j.partUuid || j.id); else n.delete('focus'); return n; });
 
+  // Scheduled column in machine order (every project, whatever the filter shows). Reordering puts a
+  // job at another job's place and renumbers the column 1..n; only ranks that changed are saved.
+  const scheduledAll = allJobs.filter(j => j.status === 'SCHEDULING')
+    .sort((a, b) => ((slotById.get(a.id) || {}).position || 0) - ((slotById.get(b.id) || {}).position || 0));
+  const reorderTo = (job, target) => {
+    if (!job || !target || job.id === target.id || job.status !== 'SCHEDULING' || target.status !== 'SCHEDULING') return;
+    const ids = scheduledAll.map(j => j.id);
+    ids.splice(ids.indexOf(job.id), 1);
+    ids.splice(ids.indexOf(target.id) + (scheduledAll.findIndex(j => j.id === job.id) < scheduledAll.findIndex(j => j.id === target.id) ? 1 : 0), 0, job.id);
+    Promise.all(ids.map((id, i) => {
+      const j = scheduledAll.find(x => x.id === id);
+      return queueRankOf(j) === i + 1 ? null : saveQueueRank(j.rowId, j.partIndex, i + 1);
+    })).catch(() => {});
+  };
+  const onCardDrop = (e, target) => {
+    const job = allJobs.find(j => j.id === dragId);
+    if (!job || job.status !== 'SCHEDULING' || target.status !== 'SCHEDULING') return; // let the column handle a stage change
+    e.preventDefault(); e.stopPropagation();
+    setOverCol(null); setDragId(null);
+    reorderTo(job, target);
+  };
+
   const onDrop = (status) => {
     setOverCol(null);
     if (!dragId) return;
@@ -92,7 +117,7 @@ export default function ProductionBoard() {
 
   return (
     <div>
-      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every ordered part in an order or a job being produced, by stage. A new order starts in the queue. Click a card to see where it slots in on the machine (its “Open” link goes to the order); drag it to change its stage. Once the customer has a part, mark it delivered (on its Dispatched card, or for the whole order on the order page) and it leaves the board.</div></div></div>
+      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every ordered part in an order or a job being produced, by stage. A new order starts in the queue. Each card shows when it is expected to start and finish on the machine; its “Open” link goes to the order. Drag a card to change its stage, and reorder the Scheduled column by dragging or with the arrows. Once the customer has a part, mark it delivered (on its Dispatched card, or for the whole order on the order page) and it leaves the board.</div></div></div>
       <div className="toolbar">
         <select aria-label="Project" data-testid="board-project-filter" style={SELECT_STYLE} value={activeProject} onChange={e => setProject(e.target.value)}>
           <option value="">All projects ({allJobs.length} part{allJobs.length === 1 ? '' : 's'})</option>
@@ -112,11 +137,9 @@ export default function ProductionBoard() {
           </div>
         </div>
       )}
-      {focus && <SchedulePanel jobs={allJobs} focus={focus} onClose={() => setFocus(null)} onOpen={(j) => j.to && navigate(j.to)} />}
-      {focusKey && !focus && <div className="card"><p style={{ margin: 0 }}>No part matching “{focusKey}” is on the board.</p></div>}
       <div className="board">
         {JOB_STATUSES.map(status => {
-          const col = jobs.filter(j => j.status === status);
+          const col = status === 'SCHEDULING' ? scheduledAll.filter(j => jobs.includes(j)) : jobs.filter(j => j.status === status);
           const cap = MACHINE_SLOTS[status];
           const over = cap !== undefined && col.length > cap;
           return (
@@ -135,7 +158,7 @@ export default function ProductionBoard() {
               </div>
               <div className="board-col-body">
                 {col.length === 0 && <div className="empty-hint">{overCol === status ? 'Drop here' : 'Empty'}</div>}
-                {col.map(j => (
+                {col.map((j, ci) => (
                   <div
                     className={`job-card ${j.draggable ? 'draggable' : ''} ${dragId === j.id ? 'dragging' : ''}`}
                     key={j.id}
@@ -145,6 +168,7 @@ export default function ProductionBoard() {
                     style={focus && focus.id === j.id ? { borderColor: 'var(--primary)', boxShadow: '0 0 0 2px var(--primary-light)' } : undefined}
                     onDragStart={() => setDragId(j.id)}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                    onDrop={(e) => onCardDrop(e, j)}
                     onClick={() => !dragId && setFocus(focus && focus.id === j.id ? null : j)}
                   >
                     <div className="jn">{j.partName}</div>
@@ -173,6 +197,14 @@ export default function ProductionBoard() {
                     {j.to && (
                       <button type="button" className="btn-text" style={{ marginTop: 6, fontSize: 11.5 }} data-testid="card-open"
                         onClick={(e) => { e.stopPropagation(); navigate(j.to); }}>Open {j.projectNo} →</button>
+                    )}
+                    {j.status === 'SCHEDULING' && col.length > 1 && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }} data-testid="card-reorder">
+                        <button type="button" className="btn-sm ghost" aria-label={`Move ${j.partName} up`} title="Earlier on the machine" disabled={ci === 0}
+                          onClick={(e) => { e.stopPropagation(); reorderTo(j, col[ci - 1]); }}>↑</button>
+                        <button type="button" className="btn-sm ghost" aria-label={`Move ${j.partName} down`} title="Later on the machine" disabled={ci === col.length - 1}
+                          onClick={(e) => { e.stopPropagation(); reorderTo(j, col[ci + 1]); }}>↓</button>
+                      </div>
                     )}
                     {j.status === 'DISPATCHED' && (
                       <button type="button" className="btn-sm ghost" style={{ marginTop: 8 }} onClick={(e) => markDelivered(e, j)}>Mark delivered</button>

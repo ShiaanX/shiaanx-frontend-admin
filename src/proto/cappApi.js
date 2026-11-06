@@ -6,15 +6,19 @@ export const CAPP_BASE = (process.env.REACT_APP_CAPP_API_URL || 'http://localhos
 // Rohit's v3 console (shiaanx_v3_standalone/ui/server.py): the interface that drives PowerMill live.
 export const V3_CONSOLE_URL = (process.env.REACT_APP_V3_CONSOLE_URL || 'http://localhost:8765').replace(/\/+$/, '');
 
-// The v3 console and PowerMill live on the planning workstation, so the button that opens them is
-// only offered when the app itself is served from this machine.
+// The planner console and PowerMill live on the planning laptop. isLocalHost tells whether this page
+// is served from that laptop itself (then the local part-analysis service can start the console).
 export const isLocalHost = () => typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+export const CONSOLE_HELP = 'The planner console runs on the planning laptop. If it does not open, start it with start_v3_console.bat.';
 
-// Opens the v3 console in a new tab, asking capp_service to start it first if it isn't running.
+// Opens the ShiaanX planner console (PowerMill) in a new tab. On localhost, capp_service is asked to
+// start it first if it isn't running. On any other host (e.g. dev.shiaanx.com) it simply opens
+// http://localhost:8765: the browser on the planning laptop reaches the laptop's own console.
 // The tab is opened synchronously inside the click so the browser doesn't treat it as a pop-up.
 export async function openV3Console() {
+  if (!isLocalHost()) { window.open(V3_CONSOLE_URL, '_blank'); return; }
   const w = window.open('', '_blank');
-  if (w) w.document.write('<p style="font:16px system-ui;padding:24px">Starting the v3 console (drives PowerMill)…</p>');
+  if (w) w.document.write('<p style="font:16px system-ui;padding:24px">Starting the planner console (PowerMill)…</p>');
   try {
     const res = await fetch(`${CAPP_BASE}/v3-console/ensure`, { method: 'POST' });
     const body = await res.json().catch(() => ({}));
@@ -22,7 +26,7 @@ export async function openV3Console() {
     if (!body.ready) throw new Error(`the console did not come up${body.log ? ` (log: ${body.log})` : ''}`);
     if (w) w.location.href = url; else window.open(url, '_blank');
   } catch (e) {
-    const msg = `Could not start the v3 console: ${e.message}. Is the part-analysis service (port 8001) running?`;
+    const msg = `Could not start the planner console: ${e.message}. Is the part-analysis service (port 8001) running?`;
     if (w) w.document.body.innerHTML = `<p style="font:16px system-ui;padding:24px;color:#b00020">${msg}</p>`;
     else console.error(msg);
   }
@@ -74,7 +78,8 @@ export function createCappJob(file, fileName, partName, material) {
 export const getCappJob = (id) => request('GET', `/jobs/${id}`);
 export const getDfm = (id, { retry } = {}) => request('GET', `/jobs/${id}/dfm`, { params: retry ? { retry: 'true' } : undefined });
 export const getQuote = (id, { qty, material } = {}) => request('GET', `/jobs/${id}/quote`, { params: { qty, material } });
-export const postReplyDraft = (id, { client_comment, topic, qty, material }) => request('POST', `/jobs/${id}/reply-draft`, { json: { client_comment, topic, qty, material } });
+// A comment can raise several topics, so no topic is sent; the draft answers each one raised.
+export const postReplyDraft = (id, { client_comment, qty, material }) => request('POST', `/jobs/${id}/reply-draft`, { json: { client_comment, qty, material } });
 export const getTracking = (id) => request('GET', `/jobs/${id}/tracking`);
 export const getCmm = (id) => request('GET', `/jobs/${id}/cmm`);
 // The job's original STEP file, as uploaded (used by the DFM 3D viewer).
@@ -87,3 +92,21 @@ export const approveProgram = (id, by) => request('POST', `/jobs/${id}/program/a
 export const programImageUrl = (id, name) => `${CAPP_BASE}/jobs/${id}/program/image/${encodeURIComponent(name)}`;
 // Real past batches of this part (machine, program, QC result).
 export const getProductionHistory = (id) => request('GET', `/jobs/${id}/production-history`);
+
+// The client quote PDF (price, terms, DFM summary). Resolves to a Blob. The service recomputes the
+// quote and the DFM review from the job; only `edits` (price, lead time, terms, notes) comes from here.
+export async function postQuotePdf(id, body) {
+  let res;
+  try {
+    res = await fetch(`${CAPP_BASE}/jobs/${id}/quote-pdf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch (e) {
+    throw new Error(`Could not reach the part-analysis service at ${CAPP_BASE}. Is it running?`);
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    let b = null;
+    try { b = JSON.parse(text); } catch (e) { b = text; }
+    throw new Error(messageFrom(b, res.status));
+  }
+  return res.blob();
+}

@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../icons';
 import KpiStrip from '../KpiStrip';
 import { useProtoData } from '../../ProtoDataContext';
-import { getProgram, approveProgram, openV3Console, isLocalHost } from '../../cappApi';
-import { useCappJob, partKeyOf } from '../../cappJobStore';
+import { getProgram, approveProgram, openV3Console, CONSOLE_HELP } from '../../cappApi';
+import { useCappJob, useAutoState, partKeyOf } from '../../cappJobStore';
 import { useCappResource, CappError, Spinner, fmtNum, show, POLL_MS } from './CappCommon';
 import { isOrdered } from '../ProcessChips';
 import CappJobRunner from './CappJobRunner';
+import V3RunSync from './V3RunSync';
 import './program.css';
 
 // Process plan & CAM program (AI, v3) for one part of an order: GET /jobs/{id}/program on
@@ -19,7 +20,7 @@ import './program.css';
 // the program page) shows it again without another click.
 const GEN_KEY = 'sx_program_generated_v1';
 function generatedJobs() { try { return JSON.parse(localStorage.getItem(GEN_KEY) || '[]') || []; } catch (e) { return []; } }
-function markGenerated(jobId) {
+export function markGenerated(jobId) {
   const all = generatedJobs();
   if (all.includes(jobId)) return;
   try { localStorage.setItem(GEN_KEY, JSON.stringify([...all, jobId].slice(-50))); } catch (e) { /* storage blocked */ }
@@ -74,6 +75,8 @@ export function useProgram(jobId, { approvedBefore } = {}) {
   const fetcher = () => getProgram(jobId).then(d => { if (d && d.status === 'ok') programCache.set(jobId, d); return d; }).then(d => (d && d.status !== 'ok' && !d.plan && !['unavailable', 'failed'].includes(d.status) ? { ...d, status: 'running' } : d));
   const live = useCappResource(fetcher, `${jobId}`, { enabled: !!jobId && asked && !cached });
   const res = !live.data && !live.loading && !live.running && !live.error && cached ? { ...live, data: cached } : live;
+  // A job started for this part elsewhere (the automatic planner) was already marked as asked for.
+  useEffect(() => { if (jobId && !asked && generatedJobs().includes(jobId)) setAsked(true); }, [jobId, asked]);
   const generate = () => { markGenerated(jobId); if (asked) live.reload(); else setAsked(true); };
   return { res, asked: asked && !!jobId, generate };
 }
@@ -116,13 +119,13 @@ export function useApproveProgram(row, partIndex, jobId, onApproved) {
   return { approve, busy, error, done };
 }
 
-export function Planning({ res }) {
+export function Planning({ res, auto }) {
   const ago = res.progress && res.progress.started_s_ago;
   return (
     <div className="cx-state" data-program-planning>
       <Spinner />
       <div>
-        <div>AI is planning this part…</div>
+        <div>{auto ? 'Planning started automatically…' : 'AI is planning this part…'}</div>
         <div className="cx-sub">Setups, tools and toolpaths from the STEP file{res.running ? ` · ${ago ? `started ${Math.round(ago)} s ago · ` : ''}checking every ${POLL_MS / 1000} s` : ''}</div>
       </div>
     </div>
@@ -185,6 +188,7 @@ export function SetupMiniTable({ setups, live, planTools }) {
 function PartProgram({ row, partIndex }) {
   const part = row.parts[partIndex];
   const { entry } = useCappJob(partKeyOf(part));
+  const autoState = useAutoState(partKeyOf(part));
   const jobId = entry && entry.jobId;
   const savedPlan = part.autoQuote && part.autoQuote.data && part.autoQuote.data.aiPlan;
   const approvedBefore = savedPlan && savedPlan.jobId === jobId ? savedPlan : null;
@@ -193,10 +197,16 @@ function PartProgram({ row, partIndex }) {
   const { approve, busy, error, done } = useApproveProgram(row, partIndex, jobId, (out) => setApprovedNow((out && out.approved) || null));
 
   if (!jobId) {
+    if (autoState && autoState.state === 'starting') {
+      return <div className="cx-state" data-program-planning><Spinner /><div><div>Planning started automatically…</div><div className="cx-sub">Reading the STEP file attached to {part.name}</div></div></div>;
+    }
     return (
       <div data-program-nojob>
-        <p className="page-sub" style={{ margin: '0 0 10px', fontSize: 14 }}><b>No analysis run for {part.name} yet.</b> The AI plans from the part's STEP file — run it first.</p>
-        <CappJobRunner part={part} />
+        {autoState && autoState.state === 'error' && (
+          <div className="stub-note" style={{ margin: '0 0 12px' }} data-program-auto-error><Icon name="info" /><div><b>Planning could not be started automatically.</b><div style={{ marginTop: 4 }}>{autoState.text}</div></div></div>
+        )}
+        <p className="page-sub" style={{ margin: '0 0 10px', fontSize: 14 }}><b>No plan for {part.name} yet.</b> The AI plans from the part's STEP file. It starts by itself once the part is in Process planning; you can also start it here.</p>
+        <CappJobRunner part={part} runLabel="Start planning from the attached STEP" />
       </div>
     );
   }
@@ -209,13 +219,13 @@ function PartProgram({ row, partIndex }) {
     return (
       <div data-program-idle>
         <FlowSteps generated={false} approved={false} scheduled={false} />
-        <p className="page-sub" style={{ margin: '10px 0 12px', fontSize: 14 }}>The v3 planner works out the setups, tools, toolpaths and cycle time for {part.name} from its STEP file.</p>
-        <button type="button" className="btn px-btn-primary" onClick={generate} data-program-generate><Icon name="cam" size={14} /> Generate with AI (v3)</button>
+        <p className="page-sub" style={{ margin: '10px 0 12px', fontSize: 14 }}>The AI works out the setups, tools, toolpaths and cycle time for {part.name} from its STEP file.</p>
+        <button type="button" className="btn px-btn-primary" onClick={generate} data-program-generate><Icon name="cam" size={14} /> Generate with AI</button>
       </div>
     );
   }
   if (res.error) return <CappError message={res.error} onRetry={res.reload} />;
-  if (!p) return <Planning res={res} />;
+  if (!p) return <Planning res={res} auto={!!(entry && entry.auto)} />;
 
   const { setups, toolCount, toolpathCount, cycle, live, plan } = programFacts(p);
   const hasPlan = !!p.plan && (setups.length > 0 || cycle !== undefined);
@@ -223,7 +233,7 @@ function PartProgram({ row, partIndex }) {
     <div data-program-summary>
       <FlowSteps generated={hasPlan} approved={!!approved} scheduled={scheduled} />
       {!hasPlan && (
-        <div className="stub-note" style={{ margin: '12px 0 0' }}><Icon name="info" /><div><b>{p.status === 'unavailable' ? 'The AI planner is not available for this part right now.' : p.status === 'failed' ? 'The AI planner could not plan this part.' : `No plan came back${p.status ? ` (${show(p.status)})` : ''}.`}</b>{[p.error, p.reason, p.detail].filter(Boolean).map((n, i) => <div key={`e${i}`} style={{ marginTop: 4 }}>{show(n)}</div>)}{(p.notes || []).map((n, i) => <div key={i} style={{ marginTop: 4 }}>{show(n)}</div>)}</div></div>
+        <div className="stub-note" style={{ margin: '12px 0 0' }}><Icon name="info" /><div><b>{p.status === 'unavailable' ? 'A plan is not available for this part right now.' : p.status === 'failed' ? 'A plan could not be made for this part.' : `No plan came back${p.status ? ` (${show(p.status)})` : ''}.`}</b>{[p.error, p.reason, p.detail].filter(Boolean).map((n, i) => <div key={`e${i}`} style={{ marginTop: 4 }}>{show(n)}</div>)}{(p.notes || []).map((n, i) => <div key={i} style={{ marginTop: 4 }}>{show(n)}</div>)}</div></div>
       )}
       {hasPlan && (
         <>
@@ -237,9 +247,10 @@ function PartProgram({ row, partIndex }) {
           {!live && <div className="cell-sub" style={{ marginTop: 8 }}>No live PowerMill program for this part yet — the plan above is the AI planner's.</div>}
         </>
       )}
+      <V3RunSync jobId={jobId} partName={part.name} live={live} onDone={res.reload} />
       <div className="pg-actions">
         <Link className="btn btn-ghost" to={`/proto/program/${row.uuid}/${partIndex}`} data-program-view><Icon name="doc" size={14} /> View program</Link>
-        {isLocalHost() && <button type="button" className="btn btn-ghost" onClick={openV3Console} data-program-console>Open v3 console (drives PowerMill) ↗</button>}
+        <button type="button" className="btn btn-ghost" onClick={openV3Console} data-program-console>Open ShiaanX planner console (PowerMill) ↗</button>
         {!approved && hasPlan && (
           <button type="button" className="btn px-btn-primary" disabled={!!busy} onClick={() => approve(p)} data-program-approve>
             <Icon name="quality" size={14} /> {busy ? 'Approving…' : 'Approve plan'}
@@ -248,6 +259,7 @@ function PartProgram({ row, partIndex }) {
         {!approved && <button type="button" className="btn-sm text" onClick={generate} disabled={!!busy}>Re-generate</button>}
         <ApprovedLine approved={approved} />
       </div>
+      <div className="cell-sub" style={{ marginTop: 6 }} data-program-console-help>{CONSOLE_HELP}</div>
       {busy && <div className="cx-state" style={{ marginTop: 10 }}><Spinner /> {busy}</div>}
       {error && <div style={{ marginTop: 10 }}><CappError message={error} /></div>}
       {approved && (

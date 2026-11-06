@@ -35,7 +35,7 @@ export default function DfmPanel({ jobId, refreshKey }) {
   if (!d) {
     return (
       <div className="cx">
-        <ResourceState res={res} runningText="v3 planner analysing the part…" onRetry={() => { retryNext.current = true; res.reload(); }} />
+        <ResourceState res={res} runningText="Checking the part for manufacturability…" onRetry={() => { retryNext.current = true; res.reload(); }} />
       </div>
     );
   }
@@ -55,7 +55,7 @@ export default function DfmPanel({ jobId, refreshKey }) {
           <span className={`chip ${counts.block ? 'err' : ''}`}><b>{counts.block}</b> blocker{counts.block === 1 ? '' : 's'}</span>
           <span className={`chip ${counts.warn ? 'warn' : ''}`}><b>{counts.warn}</b> warning{counts.warn === 1 ? '' : 's'}</span>
           <span className="chip"><b>{show(d.setups_needed)}</b> setup{Number(d.setups_needed) === 1 ? '' : 's'}</span>
-          {d.source && <span className="chip">{d.source} planner</span>}
+          {d.source && <span className="chip">{d.source}</span>}
         </span>
       </div>
 
@@ -63,7 +63,7 @@ export default function DfmPanel({ jobId, refreshKey }) {
 
       {((d.directions || []).length > 0 || (d.holes || []).length > 0) && (
         <details className="dv-more">
-          <summary>Planner details: machining directions{(d.holes || []).length ? ` and ${d.holes.length} holes` : ''}</summary>
+          <summary>Details: machining directions{(d.holes || []).length ? ` and ${d.holes.length} holes` : ''}</summary>
           {(d.directions || []).length > 0 && (
             <div className="cx-tbl" style={{ marginTop: 8 }}>
               <table className="data">

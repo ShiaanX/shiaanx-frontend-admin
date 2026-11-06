@@ -205,7 +205,7 @@ export default function EnquiryDetail() {
           </div>
         </div>
       </div>
-      <LiveAnalysisCard title="Live part analysis (v3 planner)" parts={r.parts} panels={['dfm', 'reply']} onQuote={setQuotingPart} />
+      <LiveAnalysisCard title="Manufacturability (DFM)" parts={r.parts} panels={['dfm', 'reply']} onQuote={setQuotingPart} />
       {quotingPart !== null && <AutoQuoteModal row={r} partIndex={quotingPart} onClose={() => setQuotingPart(null)} />}
       {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
       {showConvert && <ConvertModal r={r} onClose={() => setShowConvert(false)} />}

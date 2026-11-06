@@ -82,7 +82,7 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
 
   // viewTo: where View goes instead of opening the stored file — the CAM program view for the AI
   // CAM line, the inspection report view for the inspection report.
-  const Slot = ({ name, slotKey, slot, partIndex, sub, viewTo }) => {
+  const Slot = ({ name, slotKey, slot, partIndex, sub, viewTo, fixed }) => {
     const entry = slot.legacy !== undefined || partIndex !== undefined ? lookup(slotKey, slot.legacy, partIndex) : state[slotKey];
     const done = entry === true || !!(entry && entry.done);
     const progress = artifactProgress[`${jobId}:${slotKey}`];
@@ -114,7 +114,7 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
               <span className="toggle-label">Client</span>
               <button type="button" className={`toggle ${released[slotKey] ? 'on' : ''}`} onClick={() => toggleClientRelease(jobId, slotKey)} aria-label="Release to client" />
               <button type="button" className="btn-sm text" disabled={!viewTo && !fileKey} onClick={() => (viewTo ? navigate(viewTo) : openFile(fileKey))}>View</button>
-              <button type="button" className="btn-sm ghost" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Replace' : 'Regenerate')}</button>
+              {!fixed && <button type="button" className="btn-sm ghost" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Replace' : 'Regenerate')}</button>}
             </>
           ) : (
             <>
@@ -174,25 +174,35 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
   // ("Not ordered") has none. Each keeps its index in row.parts, which the slot keys are built on.
   const parts = (row ? row.parts : []).map((p, i) => ({ p, i })).filter(({ p }) => p.ordered !== false);
 
+  // On a confirmed order the quote already exists (it is finalized on the enquiry) and the program is
+  // the Process plan card's job, so there is no Generate for the quotation, no traceability pack and
+  // no AI CAM line. Only slots that already hold a file are kept: an uploaded quotation, or a CAM
+  // program a programmer uploaded.
+  const keySlot = (d, slot, i) => (slot.key ? `p${i}.${slot.key}` : (d.slots.length > 1 ? `p${i}.${d.id}.${slot.src}` : `p${i}.${d.id}`));
+  const hasFile = (key, legacy, i) => { const e = lookup(key, legacy, i); return e === true || !!(e && e.done); };
+  const jobDocs = JOB_DOCS.filter(d => (hasOrder || !d.orderOnly)
+    && !(hasOrder && (d.id === 'traceability' || (d.id === 'quote' && !hasFile('quote', undefined, undefined)))));
+  const slotsOf = (d, i) => (hasOrder && d.id === 'cam' ? d.slots.filter(s => s.src === 'human' && hasFile(keySlot(d, s, i), s.legacy, i)) : d.slots);
+
   return (
     <div className="card">
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={onFileChosen} />
       <h2><Icon name="info" /> Documents for this {hasOrder ? 'order' : 'job'}</h2>
       <p className="page-sub" style={{ margin: '-8px 0 12px' }}>
-        Some documents are for the whole job, the rest are kept per part. "Human generated" lines take a file you upload. Of the "AI generated" lines only CAM program is connected so far — it runs the CAPP pipeline on the part's STEP file.
+        Some documents are for the whole {hasOrder ? 'order' : 'job'}, the rest are kept per part. "Human generated" lines take a file you upload.{hasOrder ? ' The process plan and CAM program are in the Process plan card.' : ' Of the "AI generated" lines only CAM program is connected so far, and it works from the STEP file of the part.'}
       </p>
 
       <div className="doc-group-label">For the whole {hasOrder ? 'order' : 'job'}</div>
-      {JOB_DOCS.filter(d => hasOrder || !d.orderOnly).map(d => (
-        <Slot key={d.id} name={d.name} slotKey={d.id} slot={{ src: d.src, pending: d.pending, done: d.done }} />
+      {jobDocs.map(d => (
+        <Slot key={d.id} name={d.name} slotKey={d.id} slot={{ src: d.src, pending: d.pending, done: d.done }} fixed={hasOrder && d.src === 'ai'} />
       ))}
       <OtherDocs scope="job" hint="Common to the whole job — Certificate of Conformance and the like. Add as many as needed" />
 
       {parts.map(({ p, i }, n) => (
         <div key={p.tmpl || p.name} data-part={p.name}>
           <div className="doc-part-head"><Icon name="part" size={15} /> {p.name} <span className="cell-sub">· part {n + 1} of {parts.length}</span></div>
-          {PART_DOCS.map(d => d.slots.map((slot, si) => (
-            <Slot key={`${d.id}.${slot.src}`} name={d.name} slotKey={slot.key ? `p${i}.${slot.key}` : (d.slots.length > 1 ? `p${i}.${d.id}.${slot.src}` : `p${i}.${d.id}`)}
+          {PART_DOCS.map(d => slotsOf(d, i).map((slot, si) => (
+            <Slot key={`${d.id}.${slot.src}`} name={d.name} slotKey={keySlot(d, slot, i)}
               slot={slot} partIndex={i} sub={si > 0}
               viewTo={slot.key === 'plan' ? `/proto/parts/${p.tmpl}` : (d.id === 'inspReport' ? `/proto/inspection/${encodeURIComponent(p.name)}` : undefined)} />
           )))}
