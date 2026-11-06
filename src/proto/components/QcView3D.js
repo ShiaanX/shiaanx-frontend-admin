@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Icon from '../icons';
 import { openFlowSession } from '../api';
 
@@ -43,7 +43,7 @@ async function postFile(url, file, name) {
 // "Set up" sends the STEP and the sheet across once and remembers the result against the part, so
 // from then on the view opens by itself. The one step a person still does is tagging: clicking,
 // for each balloon, the face(s) it measures.
-export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile, fetchFile, compact, earlier }) {
+export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKey, openFile, fetchFile, compact, autoSetup }) {
   const [reach, setReach] = useState(null);     // null checking, true, false, 'expired'
   const [info, setInfo] = useState(null);       // { tagged, total } | { missing: true }
   const [reportState, setReport] = useState(null);   // { blob, name } of the uploaded inspection report
@@ -56,7 +56,7 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
 
   useEffect(() => {
     let dead = false;
-    qcFetch(`${QC_VIEW_URL}/api/health`).then(r => { if (!dead) setReach(r.ok); })
+    qcFetch(`${QC_VIEW_URL}/api/health`).then(r => { if (!dead) setReach(r.ok && /json/i.test(r.headers.get('content-type') || '')); })   // a dev server that answers every URL with its own page is not the QC service
       .catch(e => { if (!dead) setReach(e.message === SESSION_EXPIRED ? 'expired' : false); });
     return () => { dead = true; };
   }, []);
@@ -67,6 +67,17 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
     fetchFile(reportKey).then(e => { if (!dead) setReport(e ? { blob: e.blob, name: e.name } : null); });
     return () => { dead = true; };
   }, [reportKey, fetchFile]);
+
+  // autoSetup (order page): as soon as the QC sheet is on the job and the part has its CAD file, build the
+  // view once by itself, so nobody has to press anything. Never loops: one attempt per page visit.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoSetup || autoStarted.current || reach !== true || linkedJob || !part.fileKey || busy || error) return;
+    if (!report || !isXlsx(report.name)) return;
+    autoStarted.current = true;
+    setUp(report);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSetup, reach, linkedJob, report, busy, error]);
 
   const loadInfo = async (jobId, keepMode) => {
     const res = await qcFetch(`${QC_VIEW_URL}/api/labeling-jobs/${jobId}/dimensions`);
@@ -154,15 +165,6 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
         <Input ok={sheetOk} label="QC inspection sheet (.xlsx)"
           detail={sheetOk ? report.name : (report ? `${report.name} is not an .xlsx — the readings can only be read from the Excel sheet.` : 'Not uploaded — add it on the Inspection report line of the job. It supplies the balloon list, tolerances and readings.')} />
         <Input ok={!!balloonKey} label="Ballooned drawing (PDF)" detail={balloonKey ? 'Uploaded — opens alongside while tagging.' : 'Not uploaded — optional, used as a reference while tagging.'} />
-        {earlier && !report && (
-          <div style={{ marginTop: 14 }}>
-            <button type="button" className="btn px-btn-primary" disabled={!hasCad || !!busy} data-qc-earlier
-              onClick={async () => {
-                setError('');
-                try { setBusy('Fetching the earlier results…'); const rep = await earlier(); await setUp(rep); } catch (e) { setBusy(''); setError(e.message || String(e)); }
-              }}>{busy || 'Use earlier Motor Mount results'}</button>
-          </div>
-        )}
         <div style={{ marginTop: 14 }}>
           <button type="button" className="btn px-btn-primary" disabled={!hasCad || !!busy} onClick={() => setUp()}>{busy || 'Set up 3D QC view'}</button>
         </div>
