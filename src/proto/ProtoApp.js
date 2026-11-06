@@ -16,6 +16,7 @@ import Inspection from './pages/Inspection';
 import Settings from './pages/Settings';
 import View3D from './pages/View3D';
 import Complaints from './pages/Complaints';
+import ProgramPage from './pages/ProgramPage';
 
 const NAV = [
   { to: '/proto', end: true, icon: 'base', label: 'Enquiries & Orders', crumb: 'Sales / Enquiries & Orders' },
@@ -29,6 +30,7 @@ const NAV = [
 function crumbFor(pathname) {
   if (pathname.startsWith('/proto/customers')) return 'Sales / Customers';
   if (pathname.startsWith('/proto/parts')) return 'Enquiries & Orders / CAM program';
+  if (pathname.startsWith('/proto/program')) return 'Enquiries & Orders / Process plan & CAM program';
   if (pathname.startsWith('/proto/inspection')) return 'Enquiries & Orders / Inspection report';
   if (pathname.startsWith('/proto/view3d')) return 'Enquiries & Orders / 3D view';
   if (pathname.startsWith('/proto/orders') || pathname.startsWith('/proto/enquiries')) return 'Sales / Enquiries & Orders';
@@ -140,6 +142,7 @@ export default function ProtoApp() {
           <Route path="settings" element={<Settings />} />
           <Route path="view3d/:fileKey" element={<View3D />} />
           <Route path="complaints" element={<Complaints />} />
+          <Route path="program/:orderId/:partIdx" element={<ProgramPage />} />
         </Routes>
       </Shell>
       </Gate>

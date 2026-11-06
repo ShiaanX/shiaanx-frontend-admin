@@ -135,7 +135,7 @@ export default function EnquiriesOrders() {
             {filtered.length === 0 && <tr><td colSpan={6}><div className="empty-hint">No enquiries in this period match this filter.</div></td></tr>}
             {filtered.map(r => (
               <tr key={r.id} className="rowlink" onClick={() => openRow(r)}>
-                <td className="mono cell-primary">{r.id}{r.isOrder && <div className="cell-sub mono">{r.orderId}</div>}</td>
+                <td className="mono cell-primary">{r.id}{r.isOrder && r.orderId && r.orderId !== r.id && <div className="cell-sub mono">{r.orderId}</div>}</td>
                 <td title={r.customer}>{companyOf(r)}</td>
                 <td>
                   {r.assemblyName

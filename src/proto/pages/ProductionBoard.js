@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProtoData } from '../ProtoDataContext';
 import { JOB_STATUSES, JOB_STATUS_LABEL } from '../fixtures';
+import SchedulePanel, { EstimateSource } from '../components/SchedulePanel';
+import { estimateFor, approvedPlansByPart, machineMinutes, fmtHours, buildSchedule, fmtDay, fmtWhen, MACHINE_SLOTS, MACHINE_NAME } from '../components/scheduleModel';
 
 const SELECT_STYLE = { border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--ink)', borderRadius: 8, padding: '8px 10px', fontSize: 12.5 };
 
@@ -15,12 +17,24 @@ const SELECT_STYLE = { border: '1px solid var(--border)', background: 'var(--car
 // (TRIAL), and of those only the parts that were ordered (a partial convert marks the rest
 // ordered === false). A reverted or plain enquiry's parts can still carry an old stage, so the row
 // itself decides, not the part's stage.
+//
+// Clicking a card selects it (?focus=<part uuid>, or a part name such as ?focus=motor-mount) and
+// opens the schedule panel: the machine queue ahead of it and its computed start/finish
+// (components/SchedulePanel.js). The panel links on to the order.
+// The two machine columns are named for the machine; the stage vocabulary underneath is unchanged.
+const COLUMN_LABEL = { SCHEDULING: 'Scheduled' };
+const COLUMN_SUB = { PRODUCTION: `on ${MACHINE_NAME}`, SCHEDULING: `for ${MACHINE_NAME}` };
+const slug = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
 export default function ProductionBoard() {
   const { rows, customers, setPartStatus } = useProtoData();
   const navigate = useNavigate();
   const [dragId, setDragId] = useState(null);
   const [overCol, setOverCol] = useState(null);
   const [project, setProject] = useState('');
+  const [gate, setGate] = useState(null); // { job, status }: a drop waiting on "no plan yet"
+  const [search, setSearch] = useSearchParams();
+  const focusKey = search.get('focus') || '';
 
   const companyOf = (r) => { const c = (customers || []).find(x => x.id === r.customerId); return (c && c.company) || r.customer; };
 
@@ -34,6 +48,7 @@ export default function ProductionBoard() {
         id: `${r.id}:${idx}`, rowId: r.id, partIndex: idx, draggable: true,
         partName: p.name, projectNo, projectKey: r.uuid, company: companyOf(r), contact: r.customer,
         tag: 'inhouse', tl: p.machine || '—', status: p.jobStatus,
+        partUuid: p.uuid, qty: p.qty, autoQuote: p.autoQuote, deadline: r.deadline, orderDate: r.orderDate || r.date,
         to: r.isOrder ? `/proto/orders/${r.uuid}` : `/proto/enquiries/${r.uuid}`,
       });
     });
@@ -49,6 +64,12 @@ export default function ProductionBoard() {
   }, [rows, customers]);
   const activeProject = projects.some(([k]) => k === project) ? project : '';
   const jobs = activeProject ? allJobs.filter(j => j.projectKey === activeProject) : allJobs;
+  // The schedule always uses every job on the board (the filter only changes what is shown).
+  // Start and end for every job on the one machine, from the same schedule the panel uses.
+  const plans = approvedPlansByPart(allJobs);
+  const slotById = new Map(buildSchedule(allJobs).map(s => [s.job.id, s]));
+  const focus = focusKey ? (allJobs.find(j => j.partUuid === focusKey || j.id === focusKey) || allJobs.find(j => slug(j.partName) === slug(focusKey))) : null;
+  const setFocus = (j) => setSearch(prev => { const n = new URLSearchParams(prev); if (j) n.set('focus', j.partUuid || j.id); else n.delete('focus'); return n; });
 
   const onDrop = (status) => {
     setOverCol(null);
@@ -56,10 +77,13 @@ export default function ProductionBoard() {
     const job = jobs.find(j => j.id === dragId);
     setDragId(null);
     if (!job || !job.draggable || job.status === status) return;
+    // Scheduling and Production come after process planning, so a part with no plan and no cycle
+    // time cannot be given dates. Ask first; "Move anyway" stays available for the team.
+    if ((status === 'SCHEDULING' || status === 'PRODUCTION') && estimateFor(job, plans).kind === 'none') { setGate({ job, status }); return; }
     setPartStatus(job.rowId, job.partIndex, status);
   };
 
-  // Stops the click there, or the card would also open its order.
+  // Stops the click there, or the card would also be selected.
   const markDelivered = (e, job) => {
     e.stopPropagation();
     if (!window.confirm(`Mark ${job.partName} on ${job.projectNo} as delivered? It leaves the Production Board.`)) return;
@@ -68,16 +92,33 @@ export default function ProductionBoard() {
 
   return (
     <div>
-      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every ordered part in an order or a job being produced, by stage. A new order starts in the queue. Drag a card to change its stage. Once the customer has a part, mark it delivered (on its Dispatched card, or for the whole order on the order page) and it leaves the board.</div></div></div>
+      <div className="page-head"><div><h1>Production Board</h1><div className="page-sub">Every ordered part in an order or a job being produced, by stage. A new order starts in the queue. Click a card to see where it slots in on the machine (its “Open” link goes to the order); drag it to change its stage. Once the customer has a part, mark it delivered (on its Dispatched card, or for the whole order on the order page) and it leaves the board.</div></div></div>
       <div className="toolbar">
         <select aria-label="Project" data-testid="board-project-filter" style={SELECT_STYLE} value={activeProject} onChange={e => setProject(e.target.value)}>
           <option value="">All projects ({allJobs.length} part{allJobs.length === 1 ? '' : 's'})</option>
           {projects.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </select>
       </div>
+      {gate && (
+        <div className="card" data-testid="plan-gate" style={{ borderLeft: '4px solid var(--warn)' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>{gate.job.partName} ({gate.job.projectNo}) has no process plan yet</div>
+          <div className="cell-sub" style={{ marginBottom: 10 }}>
+            It has no approved plan and no cycle time, so the board cannot give it a start and end date. Generate and approve its plan first; it then moves to Scheduling by itself.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {gate.job.to && <button type="button" className="btn px-btn-primary" onClick={() => navigate(gate.job.to)}>Open {gate.job.projectNo} to generate the plan</button>}
+            <button type="button" className="btn-sm ghost" onClick={() => { setPartStatus(gate.job.rowId, gate.job.partIndex, gate.status); setGate(null); }}>Move to {JOB_STATUS_LABEL[gate.status]} anyway</button>
+            <button type="button" className="btn-sm text" onClick={() => setGate(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {focus && <SchedulePanel jobs={allJobs} focus={focus} onClose={() => setFocus(null)} onOpen={(j) => j.to && navigate(j.to)} />}
+      {focusKey && !focus && <div className="card"><p style={{ margin: 0 }}>No part matching “{focusKey}” is on the board.</p></div>}
       <div className="board">
         {JOB_STATUSES.map(status => {
           const col = jobs.filter(j => j.status === status);
+          const cap = MACHINE_SLOTS[status];
+          const over = cap !== undefined && col.length > cap;
           return (
             <div
               className={`board-col ${overCol === status ? 'drag-over' : ''}`}
@@ -87,7 +128,11 @@ export default function ProductionBoard() {
               onDragLeave={() => setOverCol(c => (c === status ? null : c))}
               onDrop={(e) => { e.preventDefault(); onDrop(status); }}
             >
-              <div className="board-col-head"><span>{JOB_STATUS_LABEL[status]}</span><span className="count">{col.length}</span></div>
+              <div className="board-col-head">
+                <span>{COLUMN_LABEL[status] || JOB_STATUS_LABEL[status]}{COLUMN_SUB[status] && <span style={{ display: 'block', fontWeight: 500, fontSize: 11, color: 'var(--muted)' }}>{COLUMN_SUB[status]}</span>}</span>
+                <span className="count" data-testid="col-count" title={cap !== undefined ? `${MACHINE_NAME} takes ${cap} here${over ? ' - over capacity' : ''}` : undefined}
+                  style={over ? { background: 'var(--warn-bg)', color: 'var(--warn-ink)' } : undefined}>{cap !== undefined ? `${col.length} / ${cap}` : col.length}</span>
+              </div>
               <div className="board-col-body">
                 {col.length === 0 && <div className="empty-hint">{overCol === status ? 'Drop here' : 'Empty'}</div>}
                 {col.map(j => (
@@ -95,15 +140,40 @@ export default function ProductionBoard() {
                     className={`job-card ${j.draggable ? 'draggable' : ''} ${dragId === j.id ? 'dragging' : ''}`}
                     key={j.id}
                     draggable={j.draggable}
-                    title={`Open ${j.projectNo}`}
+                    title={`Show where ${j.partName} slots in`}
+                    data-focused={focus && focus.id === j.id ? 'true' : undefined}
+                    style={focus && focus.id === j.id ? { borderColor: 'var(--primary)', boxShadow: '0 0 0 2px var(--primary-light)' } : undefined}
                     onDragStart={() => setDragId(j.id)}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                    onClick={() => !dragId && j.to && navigate(j.to)}
+                    onClick={() => !dragId && setFocus(focus && focus.id === j.id ? null : j)}
                   >
                     <div className="jn">{j.partName}</div>
                     <div className="jm mono" data-testid="card-project">{j.projectNo}</div>
                     <div className="jm" data-testid="card-company" title={j.contact}>{j.company}</div>
                     <div className="jt"><span className={`tag ${j.tag}`}>{j.tag === 'inhouse' ? 'In-house' : 'Partner'}</span><span className="tag">{j.tl}</span></div>
+                    {(() => { const est = estimateFor(j, plans); const m = machineMinutes(j, est); return (
+                      <div className="jm" data-testid="card-estimate" style={{ marginTop: 5, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <EstimateSource est={est} />{m !== null && <span className="mono">{fmtHours(m)}</span>}
+                      </div>
+                    ); })()}
+                    {(() => {
+                      const s = slotById.get(j.id);
+                      if (!s) return null;
+                      const committed = j.status === 'PRODUCTION' || j.status === 'SCHEDULING';
+                      if (!s.finish) return committed ? <div className="jm" data-testid="card-dates" style={{ marginTop: 5 }}>Start / end: needs an estimate</div> : null;
+                      const dl = j.deadline ? new Date(`${j.deadline}T23:59:59`) : null;
+                      const late = dl && s.finish > dl;
+                      return (
+                        <div className="jm" data-testid="card-dates" title={`${fmtWhen(s.start)} → ${fmtWhen(s.finish)}`}
+                          style={{ marginTop: 5, color: late ? 'var(--error-ink)' : undefined, opacity: committed ? 1 : 0.75 }}>
+                          {committed ? 'Start' : 'Earliest start'} <b>{fmtDay(s.start)}</b> → End <b>{fmtDay(s.finish)}</b>{late ? ' · after deadline' : ''}
+                        </div>
+                      );
+                    })()}
+                    {j.to && (
+                      <button type="button" className="btn-text" style={{ marginTop: 6, fontSize: 11.5 }} data-testid="card-open"
+                        onClick={(e) => { e.stopPropagation(); navigate(j.to); }}>Open {j.projectNo} →</button>
+                    )}
                     {j.status === 'DISPATCHED' && (
                       <button type="button" className="btn-sm ghost" style={{ marginTop: 8 }} onClick={(e) => markDelivered(e, j)}>Mark delivered</button>
                     )}

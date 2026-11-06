@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../icons';
 import KpiStrip from '../components/KpiStrip';
 import { QcBadge, QcPillGroup, ConfidenceBadge } from '../components/Badges';
 import { CL_PARTS } from '../fixtures';
 import { openFlowSession } from '../api';
+import DefectsWhy from '../components/DefectsWhy';
+import MOTOR_MOUNT_CLOSED_LOOP from '../demoData/motorMountClosedLoop';
 
 const DEFAULT_PART = 'PN-1052';
 const LIST_STYLE = { margin: 0, paddingLeft: 20, fontSize: 13.5, display: 'flex', flexDirection: 'column', gap: 8 };
@@ -173,7 +175,39 @@ function Catches({ cl }) {
 // carries real client data.
 const REPORT_URL = `${process.env.PUBLIC_URL || ''}/closed-loop-report/index.html`;
 
+// Two views: the closed-loop report (below), and "Defects & why" — each QC defect of a part linked
+// to the toolpath and tool that cut it, with the likely cause (components/DefectsWhy.js, data from
+// demoData/motorMountClosedLoop.js). ?view=defects (or /proto/closed-loop/motor-mount) opens the
+// second; &batch=run1|run2 picks the inspection batch.
+function ViewTabs({ view, setView }) {
+  return (
+    <div className="tabs" data-cl-views>
+      <button type="button" className={`tab ${view === 'report' ? 'active' : ''}`} onClick={() => setView('report')}>Closed-loop report</button>
+      <button type="button" className={`tab ${view === 'defects' ? 'active' : ''}`} onClick={() => setView('defects')}>Defects &amp; why — {MOTOR_MOUNT_CLOSED_LOOP.part}</button>
+    </div>
+  );
+}
+
 export default function ClosedLoop() {
+  const params = useParams();
+  const [search, setSearch] = useSearchParams();
+  const view = search.get('view') === 'defects' || params.partId === 'motor-mount' ? 'defects' : 'report';
+  const setView = (v) => setSearch(prev => { const n = new URLSearchParams(prev); if (v === 'defects') n.set('view', 'defects'); else n.delete('view'); return n; });
+  if (view === 'defects') {
+    const batch = search.get('batch') || 'run1';
+    return (
+      <div>
+        <div className="page-head"><div><h1>Closed Loop</h1><div className="page-sub">Each dimension QC measured on {MOTOR_MOUNT_CLOSED_LOOP.part}, linked to the toolpath and tool that cut it, with the likely cause. Graded and linked from the real inspection reports, NC programs and CAD.</div></div></div>
+        <ViewTabs view={view} setView={setView} />
+        <DefectsWhy data={MOTOR_MOUNT_CLOSED_LOOP} runId={batch}
+          onRunChange={(id) => setSearch(prev => { const n = new URLSearchParams(prev); n.set('view', 'defects'); n.set('batch', id); return n; })} />
+      </div>
+    );
+  }
+  return <ClosedLoopReport tabs={<ViewTabs view={view} setView={setView} />} />;
+}
+
+function ClosedLoopReport({ tabs }) {
   const [real, setReal] = useState(null); // null checking, true present, false absent
   useEffect(() => {
     let dead = false;
@@ -193,17 +227,18 @@ export default function ClosedLoop() {
           <div><h1>Closed Loop</h1><div className="page-sub">The closed-loop report as generated from the machine telemetry, CAM plan and QC.</div></div>
           <div className="head-actions"><a className="btn btn-ghost" href={REPORT_URL} target="_blank" rel="noreferrer">Open in a new tab</a></div>
         </div>
+        {tabs}
         <iframe title="Closed-loop report" src={REPORT_URL} data-cl-report
           style={{ width: '100%', height: 'calc(100vh - 190px)', minHeight: 620, border: '1px solid var(--border)', borderRadius: 14, background: '#fff' }} />
       </div>
     );
   }
-  return <ClosedLoopSummary />;
+  return <ClosedLoopSummary tabs={tabs} />;
 }
 
 // Fallback when the real report has not been synced in (for example on the published preview): a
 // simplified, anonymised summary of the same data. Tabs a part has no data for are disabled.
-function ClosedLoopSummary() {
+function ClosedLoopSummary({ tabs: viewTabs }) {
   const params = useParams();
   const navigate = useNavigate();
   const [tab, setTab] = useState('summary');
@@ -231,6 +266,7 @@ function ClosedLoopSummary() {
           </select>
         </div>
       </div>
+      {viewTabs}
       <div className="tabs">
         {tabs.map(([id, label, on]) => (
           <button type="button" key={id} disabled={!on} className={`tab ${active[0] === id ? 'active' : ''}`} onClick={() => setTab(id)}>{label}</button>

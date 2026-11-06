@@ -47,7 +47,7 @@ export const ROWS = [
     ] },
   { id: 'ENQ-2026-0125', customer: 'Client C', date: '2026-09-10', status: 'DISPATCHED', isOrder: true, orderId: 'ORD-2026-0077',
     orderDate: '2026-09-12', deadline: '2026-09-29', parts: [
-      { tmpl: 'TMPL-MOTORMOUNT', name: 'Motor Mount', material: 'Aluminium 7075', qty: 2, finish: 'As machined', file: 'motor_mount.stp',
+      { tmpl: 'TMPL-MOTORMOUNT', name: 'Motor Mount', material: 'Aluminium 6061', qty: 2, finish: 'As machined', file: 'motor_mount.stp',
         machine: 'VMC-01', jobStatus: 'DISPATCHED', inspection: null },
     ] },
   { id: 'ENQ-2026-0119', customer: 'Client F', date: '2026-08-30', status: 'CANCELLED', isOrder: false, parts: [
@@ -120,7 +120,7 @@ export const PART_LIBRARY = {
     setups: '1 — G54 only', operations: '4', stock: '50 × 30 × 15 mm aluminium billet',
     programSource: 'Not yet run', planStatus: 'DRAFT', datums: null, dims: null, fixture: null },
   'TMPL-MOTORMOUNT': { name: 'Motor Mount', customer: 'Client C', rev: '1',
-    setups: '3 — G54 / G55 / G56', operations: '18', stock: '95 × 70 × 40 mm 7075 billet',
+    setups: '3 — G54 / G55 / G56', operations: '18', stock: '95 × 70 × 40 mm 6061 billet',
     programSource: 'HUMAN_PROGRAMMED · v1 · ACTIVE', planStatus: 'APPROVED',
     datums: [['Datum A', 'Base face'], ['Datum B', 'Bore axis']], dims: null,
     fixture: [['Workholding', 'Fixture plate'], ['Clamp faces', 'Base + two bosses']],

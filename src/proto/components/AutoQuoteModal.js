@@ -1,80 +1,87 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  MdClose, MdSave, MdCheckCircle, MdOutlinePrecisionManufacturing, MdLayers, MdConstruction,
-  MdLocalShipping, MdInventory2, MdBarChart, MdCalculate, MdOutlineInfo, MdAutoAwesome,
+  MdClose, MdSave, MdCheckCircle, MdOutlinePrecisionManufacturing, MdInventory2, MdCalculate,
+  MdSchedule, MdCompareArrows, MdOutlineInfo,
 } from 'react-icons/md';
 import '../../components/enquiry/AutoQuoteModal.css';
 import { useProtoData } from '../ProtoDataContext';
+import { getQuote } from '../cappApi';
+import { useCappJob, partKeyOf } from '../cappJobStore';
+import CappJobRunner, { cappMaterialOf } from './capp/CappJobRunner';
+import { useCappResource, ResourceState, fmtINR, fmtNum, show } from './capp/CappCommon';
 
-// Modelled directly on the real cost-breakdown tool already built in this app
-// (src/components/enquiry/AutoQuoteModal.js + shiaanx-backend's enquiry_parts.auto_quote_data /
-// insta_quote's /process schema) rather than inventing a separate "quote" concept for the preview.
-// The only thing swapped out is the data layer: it reads/writes through ProtoDataContext instead of
-// enquiryService, and "Generate" fills the same fields with placeholder starting values instead of
-// running the real CAD pipeline (no backend here to run it against).
+// Auto-quote for one part, computed live by capp_service from the part's CAPP run:
+// GET /jobs/{id}/quote?qty=&material= — machining minutes per tool from the v3 planner, machine
+// rate, margin, stock (in inventory or from a supplier, with lead time) and the previous manual
+// quote when there is one. Every number on this sheet comes from that response; change quantity or
+// material and it is asked again. Save / Finalize store a snapshot of the response on the part.
+const MATERIALS = ['aluminium_6061', 'aluminium_6082', 'aluminium_7075'];
+
+function Row({ label, value, cls }) {
+  return <div className={`cx-row ${cls || ''}`}><span>{label}</span><span className="v">{value}</span></div>;
+}
+
 export default function AutoQuoteModal({ row, partIndex, onClose }) {
-  const { getAutoQuote, generateAutoQuote, saveAutoQuote } = useProtoData();
+  const { getAutoQuote, saveAutoQuote } = useProtoData();
   const part = row.parts[partIndex];
   const existing = getAutoQuote(row.id, partIndex);
+  const { entry } = useCappJob(partKeyOf(part));
+  const jobId = entry && entry.jobId;
+
   const [activeTab, setActiveTab] = useState('summary');
-  const [S, setS] = useState(existing ? existing.data : null);
   const [status, setStatus] = useState(existing ? existing.status : null);
+  const [qtyInput, setQtyInput] = useState(String(part.qty || 1));
+  const [qty, setQty] = useState(Number(part.qty) || 1);
+  const initialMat = cappMaterialOf(part.material);
+  const [material, setMaterial] = useState(MATERIALS.includes(initialMat) ? initialMat : 'aluminium_6061');
 
-  const handleGenerate = () => {
-    const data = generateAutoQuote(row.id, partIndex, part);
-    setS(data);
-    setStatus('DRAFT');
-  };
+  useEffect(() => {
+    const n = parseInt(qtyInput, 10);
+    if (!n || n < 1) return undefined;
+    const t = setTimeout(() => setQty(n), 500);
+    return () => clearTimeout(t);
+  }, [qtyInput]);
 
-  const handleSave = (finalize = false) => {
-    saveAutoQuote(row.id, partIndex, S, finalize);
-    setStatus(finalize ? 'FINALIZED' : 'DRAFT');
-    if (finalize) onClose();
-  };
+  const res = useCappResource(() => getQuote(jobId, { qty, material }), `${jobId}|${qty}|${material}`, { enabled: !!jobId });
+  const d = res.data;
 
-  const derived = useMemo(() => {
-    if (!S) return null;
-    const materialCost = S.stockMassKg * S.materialRate;
-    const machiningCost = (S.cycleTimeMin * S.quantity * S.machineRate) / 60;
-    const setupCost = S.setupCount * S.setupTimePerSetupMin * (S.setupCostPerMin || 25);
-    const fixtureCost = S.fixtureCost || 0;
-    const totalMachining = machiningCost + setupCost + fixtureCost;
-    const inspectionRate = S.inspectionType === 'Manual Inspection' ? (S.inspectionRateManual || 600) : (S.inspectionRateCmm || 1000);
-    const inspectionHours = S.inspectionBaseHours + (S.setupCount * S.inspectionPerSetupHours) + (S.featureCount * S.inspectionPerFeatureHours);
-    const totalInspection = inspectionHours * inspectionRate;
-    const totalFinish = (S.finishes || []).reduce((acc, f) => acc + (parseFloat(f.cost) || 0), 0);
-    const totalSecondary = (S.secondaryOps || []).reduce((acc, o) => acc + (parseFloat(o.cost) || 0), 0);
-    const totalLogistics = (S.packagingCost || 0) + (S.shippingCost || 0);
-    const totalExtras = (S.extraCharges || []).reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
-    const subTotal = materialCost + totalMachining + totalInspection + totalFinish + totalSecondary + totalLogistics + (S.miscCost || 0) + totalExtras;
-    const gstPercent = S.gstPercent || 18;
-    const gstAmount = subTotal * (gstPercent / 100);
-    const grandTotal = subTotal + gstAmount;
-    return { materialCost, totalMachining, inspectionHours, totalInspection, totalFinish, totalSecondary, totalLogistics, totalExtras, subTotal, gstAmount, grandTotal, unitPrice: grandTotal / S.quantity };
-  }, [S]);
-
-  const updateS = (key, val) => setS(prev => ({ ...prev, [key]: val }));
-  const addArrayItem = (arrayKey, newItem) => setS(prev => ({ ...prev, [arrayKey]: [...(prev[arrayKey] || []), newItem] }));
-  const removeArrayItem = (arrayKey, index) => setS(prev => ({ ...prev, [arrayKey]: (prev[arrayKey] || []).filter((_, i) => i !== index) }));
-  const updateArrayItem = (arrayKey, index, key, val) => setS(prev => ({ ...prev, [arrayKey]: (prev[arrayKey] || []).map((item, i) => (i === index ? { ...item, [key]: val } : item)) }));
-
-  if (!S) {
+  if (!jobId) {
     return (
       <div className="aq-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div className="aq-modal" style={{ height: 'auto', maxWidth: 480 }}>
-          <div className="aq-generating">
-            <MdAutoAwesome style={{ fontSize: 40, color: 'var(--aq-teal)' }} />
-            <h2 className="aq-generating-title">Start a quote for {part.name}</h2>
-            <p className="aq-generating-sub">
-              This preview cannot read the CAD file yet, so it cannot calculate a price. It opens the quote sheet with standard placeholder numbers — the same for every part — which you then replace with the real figures.
-            </p>
-            <button className="aq-btn aq-btn-primary" style={{ marginTop: 16 }} onClick={handleGenerate}>Open quote sheet with placeholder numbers</button>
-            <button className="aq-btn aq-btn-ghost" style={{ marginTop: 10 }} onClick={onClose}>Cancel</button>
+        <div className="aq-modal" style={{ height: 'auto', maxWidth: 620 }}>
+          <div className="aq-generating" style={{ alignItems: 'stretch', textAlign: 'left' }}>
+            <h2 className="aq-generating-title">Quote {part.name}</h2>
+            <p className="aq-generating-sub">The quote is calculated from the part's v3 planner run (machining time per tool, stock, setups). Run the analysis on its STEP file first.</p>
+            <div style={{ marginTop: 14 }}><CappJobRunner part={part} /></div>
+            <button className="aq-btn aq-btn-ghost" style={{ marginTop: 16, alignSelf: 'flex-start' }} onClick={onClose}>Close</button>
           </div>
         </div>
       </div>
     );
   }
+
+  const cost = (d && d.cost) || {};
+  const lead = (d && d.lead_time_days) || {};
+  const mat = (d && d.material) || {};
+  const byTool = (d && d.machining && d.machining.by_tool) || [];
+  const bySetup = (d && d.machining && d.machining.by_setup) || [];
+  const maxMin = Math.max(1, ...byTool.map(t => Number(t.minutes) || 0));
+  const prev = d && d.previous_manual_quote;
+
+  const handleSave = (finalize) => {
+    if (!d) return;
+    saveAutoQuote(row.id, partIndex, { _source: 'capp_service', cappJobId: jobId, quantity: qty, material, quote: d, savedAt: new Date().toISOString() }, finalize);
+    setStatus(finalize ? 'FINALIZED' : 'DRAFT');
+    if (finalize) onClose();
+  };
+
+  const tabs = [
+    ['summary', 'Summary', MdCalculate, cost.unit_price_inr],
+    ['machining', 'Machining', MdOutlinePrecisionManufacturing, cost.machining_inr],
+    ['material', 'Material & stock', MdInventory2, cost.material_inr],
+    ['lead', 'Lead time', MdSchedule, null],
+  ];
+  if (prev) tabs.push(['manual', 'vs manual quote', MdCompareArrows, null]);
 
   return (
     <div className="aq-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -82,16 +89,13 @@ export default function AutoQuoteModal({ row, partIndex, onClose }) {
         <header className="aq-header">
           <div className="aq-header-left">
             <div>
-              <p className="aq-header-eyebrow">Auto-Quote / Cost breakdown</p>
+              <p className="aq-header-eyebrow">Auto-Quote · calculated from the v3 planner</p>
               <h1 className="aq-header-title">{part.name}</h1>
-              <p className="aq-header-sub">{row.id}{S._source === 'placeholder' && status !== 'FINALIZED' ? ' · placeholder numbers, not calculated from the CAD file' : ''}</p>
+              <p className="aq-header-sub">{row.id} · analysis job {jobId.slice(0, 8)}</p>
             </div>
           </div>
           <div className="aq-header-actions">
-            <div className={`aq-pipeline-badge ${status === 'FINALIZED' ? 'online' : 'offline'}`}>
-              <div className="aq-badge-dot"></div>
-              {status === 'FINALIZED' ? 'Finalized' : 'Draft — preview only'}
-            </div>
+            <div className={`aq-pipeline-badge ${status === 'FINALIZED' ? 'online' : 'offline'}`}><div className="aq-badge-dot"></div>{status === 'FINALIZED' ? 'Finalized' : status === 'DRAFT' ? 'Draft saved' : 'Not saved'}</div>
             <button className="aq-btn aq-btn-ghost" onClick={onClose}><MdClose /></button>
           </div>
         </header>
@@ -99,202 +103,165 @@ export default function AutoQuoteModal({ row, partIndex, onClose }) {
         <div className="aq-body">
           <aside className="aq-sidebar">
             <div className="aq-grand-total-pill">
-              <p className="aq-grand-total-label">Grand Total (Inc. GST)</p>
-              <div className="aq-grand-total-value">₹ {derived.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <p className="aq-unit-price">Unit Price: ₹ {derived.unitPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p className="aq-grand-total-label">Unit price</p>
+              <div className="aq-grand-total-value">{d ? fmtINR(cost.unit_price_inr) : '…'}</div>
+              <p className="aq-unit-price">{d ? `Total ${fmtINR(cost.total_inr)} · ${qty} pcs · ${show(lead.total)} days` : 'Calculating…'}</p>
+            </div>
+            <div style={{ padding: '14px 20px 4px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="aq-field"><label>Quantity</label><input type="number" min="1" value={qtyInput} onChange={e => setQtyInput(e.target.value)} /></div>
+              <div className="aq-field"><label>Material</label>
+                <select value={material} onChange={e => setMaterial(e.target.value)}>
+                  {MATERIALS.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
+                </select>
+              </div>
             </div>
             <nav className="aq-nav">
-              <button className={`aq-nav-item ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}><span><MdCalculate style={{ marginRight: 8 }} /> Summary</span></button>
-              <button className={`aq-nav-item ${activeTab === 'materials' ? 'active' : ''}`} onClick={() => setActiveTab('materials')}><span><MdInventory2 style={{ marginRight: 8 }} /> Materials</span><span className="aq-nav-section-amount">₹{derived.materialCost.toFixed(0)}</span></button>
-              <button className={`aq-nav-item ${activeTab === 'machining' ? 'active' : ''}`} onClick={() => setActiveTab('machining')}><span><MdOutlinePrecisionManufacturing style={{ marginRight: 8 }} /> Machining</span><span className="aq-nav-section-amount">₹{derived.totalMachining.toFixed(0)}</span></button>
-              <button className={`aq-nav-item ${activeTab === 'inspection' ? 'active' : ''}`} onClick={() => setActiveTab('inspection')}><span><MdConstruction style={{ marginRight: 8 }} /> Inspection</span><span className="aq-nav-section-amount">₹{derived.totalInspection.toFixed(0)}</span></button>
-              <button className={`aq-nav-item ${activeTab === 'finishes' ? 'active' : ''}`} onClick={() => setActiveTab('finishes')}><span><MdLayers style={{ marginRight: 8 }} /> Finishes & Ops</span><span className="aq-nav-section-amount">₹{(derived.totalFinish + derived.totalSecondary).toFixed(0)}</span></button>
-              <button className={`aq-nav-item ${activeTab === 'logistics' ? 'active' : ''}`} onClick={() => setActiveTab('logistics')}><span><MdLocalShipping style={{ marginRight: 8 }} /> Logistics</span><span className="aq-nav-section-amount">₹{derived.totalLogistics.toFixed(0)}</span></button>
+              {tabs.map(([id, label, Ico, amt]) => (
+                <button key={id} className={`aq-nav-item ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
+                  <span><Ico style={{ marginRight: 8 }} /> {label}</span>
+                  {d && amt !== null && amt !== undefined && <span className="aq-nav-section-amount">{fmtINR(amt)}</span>}
+                </button>
+              ))}
             </nav>
-            <div style={{ padding: 20, marginTop: 'auto' }}>
-              <div className="aq-notice"><MdOutlineInfo style={{ fontSize: '1.2rem', flexShrink: 0 }} /><span>Adjusting values in fields updates the grand total in real time.</span></div>
-            </div>
           </aside>
 
-          <main className="aq-content">
-            {activeTab === 'summary' && (
-              <div className="aq-card">
-                <div className="aq-card-head"><h3>Quote Summary Breakdown</h3><span>Subtotal: ₹ {derived.subTotal.toLocaleString()}</span></div>
-                <div className="aq-card-body">
-                  <table className="aq-table">
-                    <thead><tr><th>Component</th><th>Details</th><th>Amount</th></tr></thead>
-                    <tbody>
-                      <tr><td>Material</td><td>{S.materialName} @ ₹{S.materialRate}/kg ({S.stockMassKg.toFixed(2)}kg)</td><td className="aq-amount">₹ {derived.materialCost.toLocaleString()}</td></tr>
-                      <tr><td>Machining</td><td>{S.cycleTimeMin.toFixed(2)} min/part, {S.setupCount} setup(s)</td><td className="aq-amount">₹ {derived.totalMachining.toLocaleString()}</td></tr>
-                      <tr><td>Inspection</td><td>{S.inspectionType} ({derived.inspectionHours.toFixed(2)} hrs)</td><td className="aq-amount">₹ {derived.totalInspection.toLocaleString()}</td></tr>
-                      <tr><td>Secondary Ops</td><td>{S.secondaryOps?.length || 0} operations + {S.finishes?.length || 0} finishes</td><td className="aq-amount">₹ {(derived.totalFinish + derived.totalSecondary).toLocaleString()}</td></tr>
-                      <tr><td>Logistics</td><td>{S.shippingType} to {S.deliveryCity || 'Destination'}</td><td className="aq-amount">₹ {derived.totalLogistics.toLocaleString()}</td></tr>
-                      {derived.totalExtras > 0 && <tr><td>Extra Charges</td><td>{S.extraCharges?.length || 0} manual additions</td><td className="aq-amount">₹ {derived.totalExtras.toLocaleString()}</td></tr>}
-                      <tr className="aq-subtotal"><td colSpan="2">Taxable Value</td><td className="aq-amount">₹ {derived.subTotal.toLocaleString()}</td></tr>
-                      <tr><td>GST ({S.gstPercent}%)</td><td>Integrated Goods & Services Tax</td><td className="aq-amount">₹ {derived.gstAmount.toLocaleString()}</td></tr>
-                    </tbody>
-                  </table>
-                  <div className="aq-totals-rows" style={{ marginTop: 20 }}>
-                    <div className="aq-total-row grand-total"><div className="aq-total-label grand">Final Commercial Offer</div><div className="aq-total-amount grand">₹ {derived.grandTotal.toLocaleString()}</div></div>
-                  </div>
-                  <div className="aq-field" style={{ marginTop: 20 }}>
-                    <label>Quote Notes & Assumptions</label>
-                    <textarea value={S.notes} onChange={(e) => updateS('notes', e.target.value)} placeholder="Enter any assumptions, lead time details, or exclusions…" />
-                  </div>
-                </div>
-              </div>
-            )}
+          <main className="aq-content cx">
+            {!d && <ResourceState res={res} runningText="v3 planner is analysing the part — the quote appears when it finishes…" />}
 
-            {activeTab === 'materials' && (
+            {d && activeTab === 'summary' && (
               <div className="aq-grid aq-grid-2">
                 <div className="aq-card">
-                  <div className="aq-card-head"><h3>Material Selection</h3></div>
+                  <div className="aq-card-head"><h3>Cost per unit</h3><span>{qty} pcs</span></div>
                   <div className="aq-card-body">
-                    <div className="aq-field"><label>Material Name</label><input value={S.materialName} onChange={(e) => updateS('materialName', e.target.value)} /></div>
-                    <div className="aq-field"><label>Material Rate (₹ / kg)</label><input type="number" value={S.materialRate} onChange={(e) => updateS('materialRate', parseFloat(e.target.value))} /></div>
-                    <div className="aq-field"><label>Quantity</label><input type="number" value={S.quantity} onChange={(e) => updateS('quantity', parseInt(e.target.value, 10))} /></div>
+                    <Row label="Material" value={fmtINR(cost.material_inr)} />
+                    <Row label={`Machining · ${fmtNum(d.machining && d.machining.total_minutes, 1)} min @ ${fmtINR(d.rates && d.rates.machine_inr_per_hr)}/hr`} value={fmtINR(cost.machining_inr)} />
+                    <Row label={`Setup · ${fmtNum(d.setup_minutes, 0)} min, shared over the batch`} value={fmtINR(cost.setup_inr)} />
+                    <Row label="Subtotal" value={fmtINR(cost.subtotal_inr)} cls="muted" />
+                    <Row label={`Margin · ${show(d.rates && d.rates.margin_pct)}%`} value={fmtINR(cost.margin_inr)} cls="muted" />
+                    <Row label="Unit price" value={fmtINR(cost.unit_price_inr)} cls="total" />
+                    <Row label={`Order total · ${qty} pcs`} value={fmtINR(cost.total_inr)} cls="total" />
+                    {Array.isArray(cost.excludes) && cost.excludes.length > 0 && <div className="cell-sub">Excludes {cost.excludes.join(', ')}</div>}
                   </div>
                 </div>
                 <div className="aq-card">
-                  <div className="aq-card-head"><h3>Physical Properties</h3></div>
+                  <div className="aq-card-head"><h3>At a glance</h3></div>
                   <div className="aq-card-body">
-                    <div className="aq-grid aq-grid-2">
-                      <div className="aq-field"><label>Stock Mass (kg)</label><input type="number" value={S.stockMassKg} onChange={(e) => updateS('stockMassKg', parseFloat(e.target.value))} /></div>
-                      <div className="aq-field"><label>Part Mass (kg)</label><input type="number" value={S.partMassKg} onChange={(e) => updateS('partMassKg', parseFloat(e.target.value))} /></div>
-                      <div className="aq-field"><label>Stock X (mm)</label><input type="number" value={S.stockX} onChange={(e) => updateS('stockX', parseFloat(e.target.value))} /></div>
-                      <div className="aq-field"><label>Stock Y (mm)</label><input type="number" value={S.stockY} onChange={(e) => updateS('stockY', parseFloat(e.target.value))} /></div>
-                      <div className="aq-field"><label>Stock Z (mm)</label><input type="number" value={S.stockZ} onChange={(e) => updateS('stockZ', parseFloat(e.target.value))} /></div>
-                    </div>
-                    <div className="aq-formula">
-                      <p className="aq-formula-title">Cost Formula</p>
-                      <p className="aq-formula-code">cost = stock_mass ({S.stockMassKg}kg) × rate (₹{S.materialRate}) = ₹{derived.materialCost.toLocaleString()}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'machining' && (
-              <div className="aq-grid aq-grid-2">
-                <div className="aq-card">
-                  <div className="aq-card-head"><h3>Parameters</h3></div>
-                  <div className="aq-card-body">
-                    <div className="aq-field"><label>Machine Hourly Rate (₹)</label><input type="number" value={S.machineRate} onChange={(e) => updateS('machineRate', parseFloat(e.target.value))} /></div>
-                    <div className="aq-field"><label>Cycle Time (min/part)</label><input type="number" step="0.1" value={S.cycleTimeMin} onChange={(e) => updateS('cycleTimeMin', parseFloat(e.target.value))} /></div>
-                    <div className="aq-field"><label>Setup Count</label><input type="number" value={S.setupCount} onChange={(e) => updateS('setupCount', parseInt(e.target.value, 10))} /></div>
-                  </div>
-                </div>
-                <div className="aq-card">
-                  <div className="aq-card-head"><h3>Cost Modifiers</h3></div>
-                  <div className="aq-card-body">
-                    <div className="aq-grid aq-grid-2">
-                      <div className="aq-field"><label>Time / Setup (min)</label><input type="number" value={S.setupTimePerSetupMin} onChange={(e) => updateS('setupTimePerSetupMin', parseInt(e.target.value, 10))} /></div>
-                      <div className="aq-field"><label>Setup Cost / Min (₹)</label><input type="number" value={S.setupCostPerMin} onChange={(e) => updateS('setupCostPerMin', parseInt(e.target.value, 10))} /></div>
-                      <div className="aq-field"><label>Fixture Cost (₹)</label><input type="number" value={S.fixtureCost} onChange={(e) => updateS('fixtureCost', parseInt(e.target.value, 10))} /></div>
-                    </div>
-                    <div className="aq-notice warn"><MdBarChart style={{ fontSize: '1.2rem' }} /><span>Complexity: {S.featureCount} features, {S.uniqueOperations} operations identified.</span></div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'inspection' && (
-              <div className="aq-grid aq-grid-2">
-                <div className="aq-card">
-                  <div className="aq-card-head"><h3>Inspection Basis</h3></div>
-                  <div className="aq-card-body">
-                    <div className="aq-field">
-                      <label>Inspection Type</label>
-                      <select value={S.inspectionType} onChange={(e) => updateS('inspectionType', e.target.value)}>
-                        <option value="CMM Inspection">CMM Inspection</option>
-                        <option value="Manual Inspection">Manual Inspection</option>
-                      </select>
-                    </div>
-                    {S.inspectionType === 'CMM Inspection' ? (
-                      <div className="aq-field"><label>CMM Hourly Rate (₹)</label><input type="number" value={S.inspectionRateCmm} onChange={(e) => updateS('inspectionRateCmm', parseFloat(e.target.value))} /></div>
-                    ) : (
-                      <div className="aq-field"><label>Manual Rate (₹ / hr)</label><input type="number" value={S.inspectionRateManual} onChange={(e) => updateS('inspectionRateManual', parseFloat(e.target.value))} /></div>
+                    <Row label="Lead time" value={`${show(lead.total)} days`} />
+                    <Row label="Stock" value={<>{mat.in_stock ? 'In inventory' : mat.supplier ? `${mat.supplier.name} · ${show(mat.supplier.lead_days)} days` : 'Not in stock'}{((mat.in_stock && mat.inventory_item && mat.inventory_item.sample) || (!mat.in_stock && mat.supplier && mat.supplier.sample)) && <span className="badge b-near" style={{ marginLeft: 6 }}>sample data</span>}</>} />
+                    <Row label="Machining time / part" value={`${fmtNum(d.machining && d.machining.total_minutes, 1)} min`} />
+                    <Row label="Setups" value={show((d.machining && d.machining.by_setup && d.machining.by_setup.length) || d.setups)} />
+                    <div className="cell-sub" style={{ marginTop: 10 }}>Calculated live from the v3 machining plan for this part. Change quantity or material to re-price.</div>
+                    {(d.assumptions || []).length > 0 && (
+                      <details style={{ marginTop: 14 }}>
+                        <summary className="cx-sec" style={{ cursor: 'pointer' }}>Assumptions ({d.assumptions.length})</summary>
+                        <ul style={{ margin: '8px 0 0', paddingLeft: 18, lineHeight: 1.6 }}>{d.assumptions.map((a, i) => <li key={i}>{show(a)}</li>)}</ul>
+                      </details>
                     )}
                   </div>
                 </div>
-                <div className="aq-card">
-                  <div className="aq-card-head"><h3>Calculated Effort</h3></div>
-                  <div className="aq-card-body">
-                    <div className="aq-grid aq-grid-2">
-                      <div className="aq-field"><label>Base Hours</label><input type="number" step="0.1" value={S.inspectionBaseHours} onChange={(e) => updateS('inspectionBaseHours', parseFloat(e.target.value))} /></div>
-                      <div className="aq-field"><label>Hours / Setup</label><input type="number" step="0.1" value={S.inspectionPerSetupHours} onChange={(e) => updateS('inspectionPerSetupHours', parseFloat(e.target.value))} /></div>
-                      <div className="aq-field"><label>Hours / Feature</label><input type="number" step="0.1" value={S.inspectionPerFeatureHours} onChange={(e) => updateS('inspectionPerFeatureHours', parseFloat(e.target.value))} /></div>
+              </div>
+            )}
+
+            {d && activeTab === 'machining' && (
+              <div className="aq-card">
+                <div className="aq-card-head"><h3>Machining time by tool (v3 planner)</h3><span>{fmtNum(d.machining && d.machining.total_minutes, 1)} min / part</span></div>
+                <div className="aq-card-body">
+                  {byTool.map((t, i) => (
+                    <div key={i} className="cx-bar">
+                      <div className="nm" title={`${show(t.tool)} ${t.role || ''} ${t.setup || ''}`}><b>{show(t.tool)}</b>{t.role ? <span style={{ color: 'var(--muted)' }}> · {t.role}</span> : null}{t.setup ? <span style={{ color: 'var(--muted)' }}> · {t.setup}</span> : null}</div>
+                      <div className="track"><div className="fill" style={{ width: `${Math.max(2, ((Number(t.minutes) || 0) / maxMin) * 100)}%` }} /></div>
+                      <div className="v mono">{fmtNum(t.minutes, 1)} min</div>
                     </div>
-                    <div className="aq-formula">
-                      <p className="aq-formula-title">Total Inspection: {derived.inspectionHours.toFixed(2)} hrs</p>
-                      <p className="aq-formula-code">hours = base ({S.inspectionBaseHours}) + (setups {S.setupCount} × {S.inspectionPerSetupHours}) + (feats {S.featureCount} × {S.inspectionPerFeatureHours})</p>
-                    </div>
+                  ))}
+                  {bySetup.length > 0 && (
+                    <>
+                      <div className="cx-sec" style={{ marginTop: 18 }}>By setup</div>
+                      {bySetup.map((s, i) => {
+                        // Same basis as the total: v3 cutting + this setup's tool changes at the shop ATC time.
+                        const m = d.machining || {};
+                        const atc = m.tool_change_basis === 'atc' && s.cutting_minutes !== undefined && s.cutting_minutes !== null;
+                        const mins = atc ? Number(s.cutting_minutes) + (Number(s.tool_changes) || 0) * Number(m.tool_change_s) / 60 : s.minutes;
+                        return <Row key={i} label={<span className="mono">{show(s.dir)}</span>} value={`${fmtNum(mins, 1)} min`} />;
+                      })}
+                      {d.machining && d.machining.tool_change_basis === 'atc' && (
+                        <div className="cell-sub" style={{ marginTop: 6 }}>
+                          {fmtNum(d.machining.cutting_minutes, 1)} min cutting + {show(d.machining.tool_changes)} tool changes × {show(d.machining.tool_change_s)} s (ATC).
+                          v3's own total is {fmtNum(d.machining.v3_total_minutes, 1)} min because it assumes 15 min per manual tool change.
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="aq-formula" style={{ marginTop: 16 }}>
+                    <p className="aq-formula-title">Machine rate</p>
+                    <p className="aq-formula-code">{fmtINR(d.rates && d.rates.machine_inr_per_hr)}/hr · setup {fmtNum(d.setup_minutes, 0)} min · margin {show(d.rates && d.rates.margin_pct)}%</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {activeTab === 'finishes' && (
+            {d && activeTab === 'material' && (
               <div className="aq-grid aq-grid-2">
                 <div className="aq-card">
-                  <div className="aq-card-head"><h3>Finishes & Platings</h3><button className="aq-btn aq-btn-ghost aq-btn-sm" onClick={() => addArrayItem('finishes', { type: 'Custom', name: 'New Finish', cost: 0 })}>+ Add</button></div>
+                  <div className="aq-card-head"><h3>Stock</h3></div>
                   <div className="aq-card-body">
-                    <div className="aq-dyn-list">
-                      {(S.finishes || []).map((f, i) => (
-                        <div key={i} className="aq-dyn-row">
-                          <div className="aq-dyn-row-head"><input value={f.name} onChange={(e) => updateArrayItem('finishes', i, 'name', e.target.value)} style={{ fontWeight: 'bold', border: 'none', background: 'transparent', padding: 0 }} /><button className="aq-btn aq-btn-danger aq-btn-sm" onClick={() => removeArrayItem('finishes', i)}>Delete</button></div>
-                          <div className="aq-field"><label>Cost (₹)</label><input type="number" value={f.cost} onChange={(e) => updateArrayItem('finishes', i, 'cost', parseFloat(e.target.value))} /></div>
-                        </div>
-                      ))}
-                      {(S.finishes || []).length === 0 && <p className="aq-empty">No finishes added.</p>}
-                    </div>
+                    <Row label="Grade" value={show(mat.grade)} />
+                    <Row label="Required stock (mm)" value={Array.isArray(mat.required_stock_mm) ? mat.required_stock_mm.map(v => fmtNum(v, 1)).join(' × ') : show(mat.required_stock_mm)} />
+                    <Row label="Inventory item" value={mat.inventory_item && typeof mat.inventory_item === 'object'
+                      ? <>{show(mat.inventory_item.id)}{mat.inventory_item.location ? ` · ${mat.inventory_item.location}` : ''}{mat.inventory_item.sample && <span className="badge b-near" style={{ marginLeft: 6 }}>sample data</span>}</>
+                      : show(mat.inventory_item)} />
+                    <Row label="Material cost / part" value={fmtINR(cost.material_inr)} cls="total" />
                   </div>
                 </div>
                 <div className="aq-card">
-                  <div className="aq-card-head"><h3>Secondary Operations</h3><button className="aq-btn aq-btn-ghost aq-btn-sm" onClick={() => addArrayItem('secondaryOps', { type: 'Other', name: 'New Operation', cost: 0 })}>+ Add</button></div>
+                  <div className="aq-card-head"><h3>Availability</h3><span className={`badge ${mat.in_stock ? 'b-pass' : 'b-near'}`}>{mat.in_stock ? 'In stock' : 'From supplier'}</span></div>
                   <div className="aq-card-body">
-                    <div className="aq-dyn-list">
-                      {(S.secondaryOps || []).map((o, i) => (
-                        <div key={i} className="aq-dyn-row">
-                          <div className="aq-dyn-row-head"><input value={o.name} onChange={(e) => updateArrayItem('secondaryOps', i, 'name', e.target.value)} style={{ fontWeight: 'bold', border: 'none', background: 'transparent', padding: 0 }} /><button className="aq-btn aq-btn-danger aq-btn-sm" onClick={() => removeArrayItem('secondaryOps', i)}>Delete</button></div>
-                          <div className="aq-field"><label>Cost (₹)</label><input type="number" value={o.cost} onChange={(e) => updateArrayItem('secondaryOps', i, 'cost', parseFloat(e.target.value))} /></div>
-                        </div>
-                      ))}
-                      {(S.secondaryOps || []).length === 0 && <p className="aq-empty">No secondary operations.</p>}
-                    </div>
+                    {mat.in_stock ? <p style={{ margin: 0 }}>Matching stock is in inventory — no material wait.</p>
+                      : mat.supplier ? (
+                        <>
+                          <Row label="Supplier" value={<>{show(mat.supplier.name)}{mat.supplier.sample && <span className="badge b-near" style={{ marginLeft: 6 }}>sample data</span>}</>} />
+                          <Row label="City" value={show(mat.supplier.city)} />
+                          <Row label="Lead time" value={`${show(mat.supplier.lead_days)} days`} />
+                          <Row label="Price" value={`${fmtINR(mat.supplier.price_inr_per_kg)}/kg`} />
+                        </>
+                      ) : <p style={{ margin: 0, color: 'var(--error-ink)' }}>Not in inventory and no supplier was found for this grade and size.</p>}
                   </div>
                 </div>
               </div>
             )}
 
-            {activeTab === 'logistics' && (
+            {d && activeTab === 'lead' && (
+              <div className="aq-card">
+                <div className="aq-card-head"><h3>Lead time</h3><span>{show(lead.total)} days total</span></div>
+                <div className="aq-card-body">
+                  <Row label="Material" value={`${show(lead.material)} days`} />
+                  <Row label="Machining" value={`${show(lead.machining)} days`} />
+                  <Row label="QC & dispatch" value={`${show(lead.qc_dispatch)} days`} />
+                  <Row label="Total" value={`${show(lead.total)} days`} cls="total" />
+                </div>
+              </div>
+            )}
+
+            {d && activeTab === 'manual' && prev && (
               <div className="aq-grid aq-grid-2">
                 <div className="aq-card">
-                  <div className="aq-card-head"><h3>Logistics Parameters</h3></div>
+                  <div className="aq-card-head"><h3>This quote</h3></div>
                   <div className="aq-card-body">
-                    <div className="aq-field"><label>Packaging Type</label><input value={S.packagingType} onChange={(e) => updateS('packagingType', e.target.value)} /></div>
-                    <div className="aq-field"><label>Packaging Cost (₹)</label><input type="number" value={S.packagingCost} onChange={(e) => updateS('packagingCost', parseFloat(e.target.value))} /></div>
-                    <div className="aq-field"><label>Shipping Mode</label><input value={S.shippingType} onChange={(e) => updateS('shippingType', e.target.value)} /></div>
-                    <div className="aq-field"><label>Shipping Cost (₹)</label><input type="number" value={S.shippingCost} onChange={(e) => updateS('shippingCost', parseFloat(e.target.value))} /></div>
-                    <div className="aq-field"><label>Delivery City / Destination</label><input value={S.deliveryCity} onChange={(e) => updateS('deliveryCity', e.target.value)} /></div>
+                    <Row label="Unit price" value={fmtINR(cost.unit_price_inr)} cls="total" />
+                    <Row label="Lead time" value={`${show(lead.total)} days`} />
+                    <Row label="Quantity" value={qty} />
                   </div>
                 </div>
                 <div className="aq-card">
-                  <div className="aq-card-head"><h3>Extra Charges & GST</h3><button className="aq-btn aq-btn-ghost aq-btn-sm" onClick={() => addArrayItem('extraCharges', { name: 'New Charge', amount: 0 })}>+ Add</button></div>
+                  <div className="aq-card-head"><h3>Previous manual quote</h3></div>
                   <div className="aq-card-body">
-                    <div className="aq-field"><label>Documentation / Misc Handling (₹)</label><input type="number" value={S.miscCost} onChange={(e) => updateS('miscCost', parseFloat(e.target.value))} /></div>
-                    <div className="aq-field"><label>GST / Tax Percent (%)</label><input type="number" value={S.gstPercent} onChange={(e) => updateS('gstPercent', parseFloat(e.target.value))} /></div>
-                    <div className="aq-dyn-list" style={{ marginTop: 10 }}>
-                      <p className="aq-formula-title" style={{ margin: '10px 0 5px' }}>Manual Surcharges</p>
-                      {(S.extraCharges || []).map((e, i) => (
-                        <div key={i} className="aq-dyn-row">
-                          <div className="aq-dyn-row-head"><input value={e.name} onChange={(eVal) => updateArrayItem('extraCharges', i, 'name', eVal.target.value)} style={{ fontSize: '0.8rem', border: 'none', background: 'transparent', padding: 0 }} /><button className="aq-btn aq-btn-danger aq-btn-sm" onClick={() => removeArrayItem('extraCharges', i)}>Del</button></div>
-                          <input type="number" value={e.amount} onChange={(eVal) => updateArrayItem('extraCharges', i, 'amount', parseFloat(eVal.target.value))} style={{ fontSize: '0.8rem' }} />
-                        </div>
-                      ))}
-                    </div>
+                    {typeof prev === 'object'
+                      ? Object.entries(prev).map(([k, v]) => <Row key={k} label={k.replace(/_/g, ' ')} value={/inr/i.test(k) ? fmtINR(v) : show(v)} />)
+                      : <p style={{ margin: 0 }}>{show(prev)}</p>}
                   </div>
                 </div>
+                {d.calibration_note && (
+                  <div className="aq-notice" style={{ gridColumn: '1 / -1' }}><MdOutlineInfo style={{ fontSize: '1.2rem', flexShrink: 0 }} /><span>{d.calibration_note}</span></div>
+                )}
               </div>
             )}
           </main>
@@ -302,13 +269,11 @@ export default function AutoQuoteModal({ row, partIndex, onClose }) {
 
         <footer className="aq-footer">
           <div className="aq-footer-left">
-            <span style={{ fontSize: '0.8rem', color: 'var(--aq-muted)' }}>
-              Status: <strong style={{ color: status === 'FINALIZED' ? 'var(--aq-teal)' : 'var(--aq-amber)' }}>{status || 'DRAFT'}</strong>
-            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--aq-muted)' }}>Status: <strong>{status || 'NOT SAVED'}</strong></span>
           </div>
           <div className="aq-footer-right">
-            <button className="aq-btn aq-btn-secondary" onClick={() => handleSave(false)}><MdSave /> Save Draft</button>
-            <button className="aq-btn aq-btn-primary" onClick={() => handleSave(true)}><MdCheckCircle /> Finalize Quote</button>
+            <button className="aq-btn aq-btn-secondary" disabled={!d} onClick={() => handleSave(false)}><MdSave /> Save Draft</button>
+            <button className="aq-btn aq-btn-primary" disabled={!d} onClick={() => handleSave(true)}><MdCheckCircle /> Finalize Quote</button>
           </div>
         </footer>
       </div>

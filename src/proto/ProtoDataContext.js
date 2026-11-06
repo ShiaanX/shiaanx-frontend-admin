@@ -244,9 +244,27 @@ export function ProtoDataProvider({ children }) {
     return d;
   };
 
+  // Saving a quote replaces autoQuote.data, so carry over an approved AI plan (saveApprovedPlan)
+  // that already lives there; otherwise the Production Board falls back to programmer time.
   const saveAutoQuote = (rowId, partIndex, d, finalize) => {
     const r = findRow(rowId);
-    return run(() => call('PATCH', `/parts/${r.parts[partIndex].uuid}`, { json: { autoQuote: { data: d, status: finalize ? 'FINALIZED' : 'DRAFT' } } })).catch(() => {});
+    const prev = r.parts[partIndex].autoQuote;
+    const aiPlan = prev && prev.data && prev.data.aiPlan;
+    const data = aiPlan && !(d && d.aiPlan) ? { ...d, aiPlan } : d;
+    return run(() => call('PATCH', `/parts/${r.parts[partIndex].uuid}`, { json: { autoQuote: { data, status: finalize ? 'FINALIZED' : 'DRAFT' } } })).catch(() => {});
+  };
+
+  // The approved AI process plan's times (Process plan & CAM program card), kept as `aiPlan` inside
+  // the part's auto-quote record (the per-part store the flow API has) beside whatever quote is
+  // already there, so the Production Board's schedule can use them. The quote and its status are
+  // left as they are. Re-throws on error so the card can say so.
+  const saveApprovedPlan = (rowId, partIndex, aiPlan) => {
+    const r = findRow(rowId);
+    const p = r && r.parts[partIndex];
+    if (!p) return Promise.resolve();
+    const prev = p.autoQuote || null;
+    const data = { ...((prev && prev.data) || { _source: 'ai_plan' }), aiPlan };
+    return run(() => call('PATCH', `/parts/${p.uuid}`, { json: { autoQuote: { data, status: (prev && prev.status) || 'DRAFT' } } }));
   };
 
   // A manual quote — an Excel sheet or PDF made outside the auto-quote tool.
@@ -377,7 +395,7 @@ export function ProtoDataProvider({ children }) {
     addPartsToOrder, repeatEnquiry,
     addComplaint, updateComplaint, addComplaintAttachments, removeComplaint,
     patchEnquiry, setPartStatus, applyEnquiryUpdate,
-    getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote,
+    getAutoQuote, generateAutoQuote, saveAutoQuote, uploadManualQuote, saveApprovedPlan,
     settings, saveSetting, removeSetting, patchPartLibrary,
     generateProcessPlan, artifactProgress, addOtherDocument, removeOtherDocument,
     artifactState, markArtifactDone, openArtifactFile, openFile, downloadFile, fetchFile,

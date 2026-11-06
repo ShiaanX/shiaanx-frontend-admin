@@ -6,6 +6,7 @@ import { VerdictBadge } from '../components/Badges';
 import { INSPECTION_BY_PART } from '../fixtures';
 import { useProtoData } from '../ProtoDataContext';
 import { openFlowSession } from '../api';
+import LiveAnalysisCard from '../components/capp/LiveAnalysisCard';
 
 // Where the 3D QC view is served from: the labeling app in the shiaanx-CAPP repo. On the dev server
 // it sits behind the same address as this app; REACT_APP_QC_URL points elsewhere for local work.
@@ -242,6 +243,7 @@ export default function Inspection() {
           reportKey={reportKey} balloonKey={balloonKey} openFile={openFile} fetchFile={fetchFile}
           onLink={(jobId) => patchPartLibrary(tmpl, { qcJobId: jobId })} />
       )}
+      {tmpl && <LiveAnalysisCard title="CMM program" parts={[owner.parts[partIndex]]} panels={['cmm']} />}
       {!linkedQc && <div className="card">
         <h2><Icon name="box" /> Dimensions</h2>
         {s && (

@@ -13,6 +13,7 @@ import PartPickerModal from '../components/PartPickerModal';
 import ProcessChips, { NotOrderedBadge } from '../components/ProcessChips';
 import RepeatLinks from '../components/RepeatLinks';
 import ComplaintsCard from '../components/ComplaintsCard';
+import LiveAnalysisCard from '../components/capp/LiveAnalysisCard';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
 
@@ -204,6 +205,7 @@ export default function EnquiryDetail() {
           </div>
         </div>
       </div>
+      <LiveAnalysisCard title="Live part analysis (v3 planner)" parts={r.parts} panels={['dfm', 'reply']} onQuote={setQuotingPart} />
       {quotingPart !== null && <AutoQuoteModal row={r} partIndex={quotingPart} onClose={() => setQuotingPart(null)} />}
       {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
       {showConvert && <ConvertModal r={r} onClose={() => setShowConvert(false)} />}

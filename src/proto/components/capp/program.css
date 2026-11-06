@@ -1,0 +1,55 @@
+/* Process plan & CAM program card/page, editable status timeline, previous production. Built on proto.css tokens. */
+.proto-app .pg-prominent { border: 2px solid var(--primary); box-shadow: 0 0 0 4px var(--primary-light); }
+.proto-app .pg-steps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: var(--muted); }
+.proto-app .pg-step { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.proto-app .pg-step .dot { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; border: 2px solid var(--border); background: var(--card-bg); }
+.proto-app .pg-step.on { color: var(--ok-ink); }
+.proto-app .pg-step.on .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.proto-app .pg-step-line { width: 28px; height: 2px; background: var(--border); }
+.proto-app .pg-step-line.on { background: var(--ok); }
+.proto-app .pg-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.proto-app .pg-actions a.btn { text-decoration: none; }
+.proto-app .pg-approved { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ok-ink); background: var(--ok-bg); border-radius: 20px; padding: 5px 12px; }
+.proto-app .pg-success { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding: 14px 16px; border-radius: 10px; background: var(--ok-bg); color: var(--ok-ink); }
+.proto-app .pg-success a.btn { text-decoration: none; }
+.proto-app .pg-success .cx-sub { color: var(--ink); font-size: 13px; margin-top: 3px; }
+.proto-app .pg-notes { margin: 10px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+.proto-app .pg-setups { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.proto-app .pg-setup { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.proto-app .pg-setup .dir { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.proto-app .pg-setup dl { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13px; }
+.proto-app .pg-setup dt { color: var(--muted); }
+.proto-app .pg-setup dd { margin: 0; }
+.proto-app .pg-group td { background: var(--shell-bg); font-weight: 700; }
+.proto-app .pg-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.proto-app .pg-images figure { margin: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--card-bg); }
+.proto-app .pg-images img { width: 100%; display: block; }
+.proto-app .pg-images figcaption { font-size: 12px; color: var(--muted); padding: 6px 10px; }
+.proto-app .pg-pm { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--primary-light); font-size: 14px; word-break: break-all; }
+/* Editable status timeline */
+.proto-app .tl-item.tl-click { cursor: pointer; border-radius: 8px; margin-left: -6px; padding-left: 6px; }
+.proto-app .tl-item.tl-click:hover { background: var(--primary-light); }
+.proto-app .tl-item.tl-current .tl-t { color: var(--primary); }
+.proto-app .tl-item.tl-current::before { width: 14px; height: 14px; left: -24px; top: 1px; }
+.proto-app .tl-now { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #fff; background: var(--primary); border-radius: 5px; padding: 1px 6px; margin-left: 6px; }
+.proto-app .tl-confirm { margin: 4px 0 2px; padding: 8px 10px; border-radius: 8px; background: var(--shell-bg); border: 1px solid var(--border); font-size: 12.5px; color: var(--ink); cursor: default; display: flex; flex-direction: column; gap: 8px; }
+.proto-app .tl-confirm .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* Previous production */
+.proto-app .ph-qc { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 10px; }
+.proto-app .ph-qc .seg { padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 13.5px; }
+.proto-app .ph-qc .seg.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.proto-app .ph-qc .seg.near { background: var(--warn-bg); color: var(--warn-ink); }
+.proto-app .ph-qc .seg.out { background: var(--error-bg); color: var(--error-ink); }
+.proto-app details.ph-det > summary { cursor: pointer; font-weight: 700; font-size: 13.5px; color: var(--primary); margin: 10px 0 8px; }
+.proto-app .ph-md-lines { margin: 4px 0 10px; padding-left: 18px; font-size: 13.5px; line-height: 1.45; }
+.proto-app .ph-md-tbl td, .proto-app .ph-md-tbl th { vertical-align: top; }
+.proto-app .ph-md-bar { display: flex; width: 140px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); margin-top: 4px; }
+.proto-app .ph-md-bar span, .proto-app .ph-md-legend i { display: block; height: 100%; }
+.proto-app .ph-md-bar .run, .proto-app .ph-md-legend .run { background: var(--ok); }
+.proto-app .ph-md-bar .hold, .proto-app .ph-md-legend .hold { background: var(--error-ink); }
+.proto-app .ph-md-bar .man, .proto-app .ph-md-legend .man { background: var(--warn-ink); }
+.proto-app .ph-md-bar .idle, .proto-app .ph-md-legend .idle { background: var(--muted); opacity: .45; }
+.proto-app .ph-md-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+.proto-app .ph-md-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.proto-app .ph-md-legend i { width: 10px; height: 8px; border-radius: 2px; }
+.proto-app .ph-md-src { font-size: 11.5px; color: var(--muted); margin: 6px 0 10px; }

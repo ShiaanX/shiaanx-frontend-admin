@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 import { StatusBadge } from '../components/Badges';
@@ -10,9 +10,12 @@ import PartPickerModal from '../components/PartPickerModal';
 import ProcessChips, { NotOrderedBadge, isOrdered } from '../components/ProcessChips';
 import RepeatLinks from '../components/RepeatLinks';
 import ComplaintsCard from '../components/ComplaintsCard';
+import LiveAnalysisCard from '../components/capp/LiveAnalysisCard';
+import ProgramCard from '../components/capp/ProgramCard';
+import StatusTimeline from '../components/StatusTimeline';
 import { useProtoData } from '../ProtoDataContext';
 import { fmtDate } from '../utils';
-import { ORDER_STAGES, JOB_STATUS_LABEL } from '../fixtures';
+import { ORDER_STAGES } from '../fixtures';
 
 
 export default function OrderDetail() {
@@ -22,6 +25,7 @@ export default function OrderDetail() {
   const r = findOrder(orderId);
   const [showUpdate, setShowUpdate] = useState(false);
   const [picker, setPicker] = useState(null); // 'add' | 'repeat'
+  const planTop = useRef(false);
   if (!r) return <div className="empty-hint">Order not found.</div>;
   // Parts left out when the enquiry was converted stay on the job but are not being made, so the
   // stage, the delivery check and the production cards only look at the ordered ones.
@@ -40,6 +44,12 @@ export default function OrderDetail() {
     if (i > stage) return 'Pending';
     return i < stage || delivered || s === 'DISPATCHED' ? 'Done' : 'In progress';
   };
+  // While a part is in process planning, the AI plan card sits at the top of the page.
+  // Once there, it stays there for this visit, so approving (which moves the part on to Scheduling)
+  // does not make the card jump away mid-flow.
+  const planningNow = !delivered && (ordered.length ? ordered : r.parts).some(p => p.jobStatus === 'PROCESS_PLANNING');
+  if (planningNow) planTop.current = true;
+  const planCardTop = planTop.current;
   // Every piece has left the shop, so the customer can be recorded as having the order.
   const allShipped = ordered.length > 0 && ordered.every(p => p.jobStatus === 'DISPATCHED' || p.jobStatus === 'DELIVERED');
   const setDelivered = (on) => {
@@ -73,6 +83,7 @@ export default function OrderDetail() {
           <button type="button" className="btn btn-ghost"><Icon name="doc" /> Build traceability pack</button>
         </div>
       </div>
+      {planCardTop && <ProgramCard row={r} prominent={planningNow} />}
       <div className="grid2">
         <div>
           <div className="card">
@@ -116,21 +127,11 @@ export default function OrderDetail() {
         </div>
         <div>
           <DocumentsReceived row={r} />
-          <div className="card">
-            <h2>Status history</h2>
-            <div className="timeline">
-              <div className="tl-item"><div className="tl-t">Order placed</div><div className="tl-d">{fmtDate(r.orderDate)}</div></div>
-              {ORDER_STAGES.map((s, i) => (
-                <div key={s} className={`tl-item ${i > stage || (s === 'DELIVERED' && !delivered) ? 'future' : ''}`}>
-                  <div className="tl-t">{JOB_STATUS_LABEL[s]}</div>
-                  <div className="tl-d">{stepDetail(s, i)}</div>
-                </div>
-              ))}
-            </div>
-            {ordered.length > 1 && <div className="cell-sub" style={{ marginTop: 12 }}>Follows the piece furthest behind.</div>}
-          </div>
+          <StatusTimeline row={r} ordered={ordered} stage={stage} delivered={delivered} stepDetail={stepDetail} />
         </div>
       </div>
+      {!planCardTop && <ProgramCard row={r} />}
+      <LiveAnalysisCard title="Production tracking — program, previous batches and QC" parts={ordered.length ? ordered : r.parts} panels={['tracking']} />
       {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
       {picker === 'add' && (
         <PartPickerModal
