@@ -26,7 +26,7 @@ function gradeReading(value, nominal, tolPlus, tolMinus) {
   return { dev, v: 'pass', use: tol > 0 ? Math.abs(dev) / tol : 0 };
 }
 
-const RANK = { fail: 3, near: 2, pass: 1, checked: 0 };
+export const RANK = { fail: 3, near: 2, pass: 1, checked: 0 };
 
 export function gradeDim(d) {
   const readings = [];
@@ -47,7 +47,7 @@ export function gradeDim(d) {
 }
 
 // The toolpaths that cut a dimension's feature, finishing/drilling first (they set the size).
-function cuttersOf(run, sl) {
+export function cuttersOf(run, sl) {
   const byName = new Map(run.toolpaths.map(t => [t.name, t]));
   const links = (run.links[sl] || []).map(l => ({ ...byName.get(l.toolpath), evidence: l.evidence })).filter(t => t.name);
   const order = { finish: 0, drill: 1, rough: 2 };
@@ -55,7 +55,7 @@ function cuttersOf(run, sl) {
 }
 
 // Cause rules. Each returns null or { title, detail, confidence }.
-function causesFor(g, feat, cutters, run, allRuns, gradedByRun) {
+export function causesFor(g, feat, cutters, run, allRuns, gradedByRun) {
   const out = [];
   if (g.verdict === 'pass' || g.verdict === 'checked') return out;
   const sizing = cutters.filter(c => c.role !== 'rough');
@@ -158,7 +158,7 @@ function causesFor(g, feat, cutters, run, allRuns, gradedByRun) {
   return out;
 }
 
-function Readings({ g }) {
+export function Readings({ g }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {g.readings.map((r, i) => (
@@ -170,7 +170,7 @@ function Readings({ g }) {
   );
 }
 
-function CutterTable({ cutters }) {
+export function CutterTable({ cutters }) {
   if (!cutters.length) return <p className="cell-sub" style={{ margin: 0 }}>No toolpath linked: the geometric scan found no cutter on this feature.</p>;
   return (
     <div className="overflow-x">

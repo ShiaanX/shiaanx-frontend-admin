@@ -12,6 +12,7 @@ import PartWorkspace from './pages/PartWorkspace';
 import ProductionBoard from './pages/ProductionBoard';
 import CamPrograms from './pages/CamPrograms';
 import ClosedLoop from './pages/ClosedLoop';
+import Factory from './pages/Factory';
 import Inspection from './pages/Inspection';
 import Settings from './pages/Settings';
 import View3D from './pages/View3D';
@@ -24,6 +25,7 @@ const NAV = [
   { to: '/proto/board', icon: 'board', label: 'Production Board', crumb: 'Production / Production Board' },
   { to: '/proto/cam', icon: 'cam', label: 'CAM Programs', crumb: 'Production / CAM Programs' },
   { to: '/proto/closed-loop', icon: 'knowledge', label: 'Closed Loop', crumb: 'Production / Closed Loop' },
+  { to: '/proto/factory', icon: 'board', label: 'Factory', crumb: 'Production / Factory' },
   { to: '/proto/complaints', icon: 'quality', label: 'Complaints & Feedback', crumb: 'Quality / Complaints & Feedback' },
   { to: '/proto/settings', icon: 'settings', label: 'Settings', crumb: 'Admin / Settings' },
 ];
@@ -138,6 +140,7 @@ export default function ProtoApp() {
           <Route path="parts/:tmplId" element={<PartWorkspace />} />
           <Route path="board" element={<ProductionBoard />} />
           <Route path="cam" element={<CamPrograms />} />
+          <Route path="factory" element={<Factory />} />
           <Route path="closed-loop" element={<ClosedLoop />} />
           <Route path="closed-loop/:partId" element={<ClosedLoop />} />
           <Route path="inspection/:part" element={<Inspection />} />

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Icon from '../icons';
+import WhyPanel, { hasWhyData } from './WhyPanel';
 import { openFlowSession } from '../api';
 
 // Where the 3D QC view is served from: the labeling app in the shiaanx-CAPP repo. On the dev server
@@ -210,6 +211,7 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
         {mode === 'result' && info.tagged === 0 && <p className="page-sub" style={{ margin: '0 0 10px' }}>Nothing is tagged yet, so there is nothing to show on the model. Use Tag dimensions first.</p>}
         <iframe key={`${mode}-${frameKey}`} title="3D QC view" src={`${QC_VIEW_URL}/${mode === 'tag' ? 'dimensions' : 'inspection'}?job=${linkedJob}&embed=1&v=${PAGE_LOAD}`}
           style={{ width: '100%', height: 760, border: '1px solid var(--border)', borderRadius: 10 }} />
+        {mode === 'result' && hasWhyData(part) && <WhyPanel />}
       </>
     );
   }
