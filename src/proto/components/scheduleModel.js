@@ -42,8 +42,8 @@ export function estimateFor(job, plans) {
   if (ai && Number(ai.cycleMinutesPerPart) > 0) {
     const when = ai.approvedAt ? new Date(ai.approvedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
     return {
-      minutesPerPart: Number(ai.cycleMinutesPerPart), setups: Number(ai.setups) || 1, label: 'AI plan (v3)', kind: 'ai', real: true,
-      source: `Approved AI plan (v3): ${Number(ai.cycleMinutesPerPart).toFixed(1)} min per part including tool changes${ai.approvedBy ? `, approved by ${ai.approvedBy}` : ''}${when ? ` on ${when}` : ''}.`,
+      minutesPerPart: Number(ai.cycleMinutesPerPart), setups: Number(ai.setups) || 1, label: 'AI plan', kind: 'ai', real: true,
+      source: `Approved AI plan: ${Number(ai.cycleMinutesPerPart).toFixed(1)} min per part including tool changes${ai.approvedBy ? `, approved by ${ai.approvedBy}` : ''}${when ? ` on ${when}` : ''}.`,
     };
   }
   // Same part, approved on another order: reuse that plan (labelled, so it is never mistaken for this
@@ -51,7 +51,7 @@ export function estimateFor(job, plans) {
   const shared = plans && plans.get(partKey(job.partName));
   if (shared && Number(shared.ai.cycleMinutesPerPart) > 0) {
     return {
-      minutesPerPart: Number(shared.ai.cycleMinutesPerPart), setups: Number(shared.ai.setups) || 1, label: 'AI plan (v3)', kind: 'ai', real: true, reused: true,
+      minutesPerPart: Number(shared.ai.cycleMinutesPerPart), setups: Number(shared.ai.setups) || 1, label: 'AI plan', kind: 'ai', real: true, reused: true,
       source: `Reused from the approved plan on ${shared.projectNo || 'another order'} (same part): ${Number(shared.ai.cycleMinutesPerPart).toFixed(1)} min per part including tool changes.`,
     };
   }

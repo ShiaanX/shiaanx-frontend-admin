@@ -1,0 +1,16 @@
+.proto-app .ep-headline { font-size: 20px; margin: 0 0 14px; color: var(--ink); }
+.proto-app .ep-headline b { font-weight: 800; }
+.proto-app .ep-headline .badge { font-size: 14px; vertical-align: middle; margin-left: 6px; }
+.proto-app .ep-tbl td, .proto-app .ep-tbl th { font-size: 14px; vertical-align: middle; }
+.proto-app .ep-line { font-size: 14px; white-space: nowrap; }
+.proto-app .ep-line .badge { margin-left: 6px; font-size: 13px; }
+.proto-app .ep-muted { font-size: 13px; color: var(--muted); }
+.proto-app .ep-cell { min-width: 190px; }
+.proto-app .ep-bars { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.proto-app .ep-bars span { display: block; height: 6px; border-radius: 3px; min-width: 3px; }
+.proto-app .ep-bars .plan { background: var(--muted); opacity: .45; }
+.proto-app .ep-bars .real { background: var(--ok); }
+.proto-app .ep-bars .real.over { background: var(--warn); }
+.proto-app .ep-gauge { position: relative; height: 8px; margin-top: 8px; border-radius: 4px; background: var(--border); width: 160px; }
+.proto-app .ep-gauge .range { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--primary); }
+.proto-app .ep-gauge .mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }

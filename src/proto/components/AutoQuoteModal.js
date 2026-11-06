@@ -294,7 +294,7 @@ export default function AutoQuoteModal({ row, partIndex, onClose }) {
                   <div className="aq-card-head"><h3>At a glance</h3></div>
                   <div className="aq-card-body">
                     <Row label="Lead time" value={`${show(leadDefault)} days`} />
-                    <Row label="Stock" value={<>{mat.in_stock ? `In stock · ${show(mat.inventory_item && mat.inventory_item.id)}` : mat.supplier ? `${mat.supplier.name} · ${leadText(mat.supplier)}` : 'Not in stock'}{((mat.in_stock && mat.inventory_item && mat.inventory_item.sample) || (!mat.in_stock && mat.supplier && mat.supplier.lead_basis !== 'actual')) && <span className="badge b-near" style={{ marginLeft: 6 }}>{mat.in_stock ? 'sample data' : 'estimate'}</span>}</>} />} />
+                    <Row label="Stock" value={<>{mat.in_stock ? `In stock · ${show(mat.inventory_item && mat.inventory_item.id)}` : mat.supplier ? `${mat.supplier.name} · ${leadText(mat.supplier)}` : 'Not in stock'}{((mat.in_stock && mat.inventory_item && mat.inventory_item.sample) || (!mat.in_stock && mat.supplier && mat.supplier.lead_basis !== 'actual')) && <span className="badge b-near" style={{ marginLeft: 6 }}>{mat.in_stock ? 'sample data' : 'estimate'}</span>}</>} />
                     <Row label="Machining time / part" value={`${fmtNum(d.machining && d.machining.total_minutes, 1)} min`} />
                     <Row label="Setups" value={show((d.machining && d.machining.by_setup && d.machining.by_setup.length) || d.setups)} />
                     <div className="cell-sub" style={{ marginTop: 10 }}>Calculated live from this part's machining plan. Change quantity or material to re-price.</div>
@@ -354,7 +354,15 @@ export default function AutoQuoteModal({ row, partIndex, onClose }) {
                     <Row label="Grade" value={show(mat.grade)} />
                     <Row label="Required stock (mm)" value={Array.isArray(mat.required_stock_mm) ? mat.required_stock_mm.map(v => fmtNum(v, 1)).join(' × ') : show(mat.required_stock_mm)} />
                     <Row label="Inventory item" value={mat.inventory_item && typeof mat.inventory_item === 'object'
-                      ? <>{show(mat.inventory_item.id)}{mat.inventory_item.size ? ` · ${mat.inventory_item.shape} ${mat.inventory_item.size}` : ''}{mat.inventory_item.location ? ` · rack ${mat.inventory_item.location}` : ''}{mat.inventory_item.items_needed ? ` · ${mat.inventory_item.items_needed} of ${show(mat.inventory_item.qty)} on hand` : ''}{mat.inventory_item.sample && <span className="badge b-near" style={{ marginLeft: 6 }}>sample data</span>}</>
+                      ? <span style={{ display: 'block', textAlign: 'right', whiteSpace: 'normal' }}>
+                          <b>{show(mat.inventory_item.id)}</b>
+                          <span className="cell-sub" style={{ display: 'block' }}>
+                            {[mat.inventory_item.size ? `${mat.inventory_item.shape} ${mat.inventory_item.size}` : null,
+                              mat.inventory_item.location ? `rack ${mat.inventory_item.location}` : null,
+                              mat.inventory_item.items_needed ? `${mat.inventory_item.items_needed} of ${show(mat.inventory_item.qty)} on hand` : null].filter(Boolean).join(' · ')}
+                          </span>
+                          {mat.inventory_item.sample && <span className="badge b-near">sample data</span>}
+                        </span>
                       : show(mat.inventory_item)} />
                     <Row label="Material cost / part" value={fmtINR(cost.material_inr)} cls="total" />
                   </div>

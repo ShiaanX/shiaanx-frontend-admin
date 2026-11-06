@@ -82,7 +82,14 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
 
   // viewTo: where View goes instead of opening the stored file — the CAM program view for the AI
   // CAM line, the inspection report view for the inspection report.
-  const Slot = ({ name, slotKey, slot, partIndex, sub, viewTo, fixed }) => {
+  // scrollId: on an order page the inspection report's View scrolls to the QC 3D section instead.
+  const goView = (viewTo, scrollId, fileKey) => {
+    const el = scrollId && document.getElementById(scrollId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if (viewTo) navigate(viewTo);
+    else openFile(fileKey);
+  };
+  const Slot = ({ name, slotKey, slot, partIndex, sub, viewTo, scrollId, fixed }) => {
     const entry = slot.legacy !== undefined || partIndex !== undefined ? lookup(slotKey, slot.legacy, partIndex) : state[slotKey];
     const done = entry === true || !!(entry && entry.done);
     const progress = artifactProgress[`${jobId}:${slotKey}`];
@@ -113,12 +120,12 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
             <>
               <span className="toggle-label">Client</span>
               <button type="button" className={`toggle ${released[slotKey] ? 'on' : ''}`} onClick={() => toggleClientRelease(jobId, slotKey)} aria-label="Release to client" />
-              <button type="button" className="btn-sm text" disabled={!viewTo && !fileKey} onClick={() => (viewTo ? navigate(viewTo) : openFile(fileKey))}>View</button>
+              <button type="button" className="btn-sm text" disabled={!viewTo && !fileKey} onClick={() => goView(viewTo, scrollId, fileKey)}>View</button>
               {!fixed && <button type="button" className="btn-sm ghost" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Replace' : 'Regenerate')}</button>}
             </>
           ) : (
             <>
-              {viewTo && human && <button type="button" className="btn-sm text" onClick={() => navigate(viewTo)}>View</button>}
+              {viewTo && human && <button type="button" className="btn-sm text" onClick={() => goView(viewTo, scrollId)}>View</button>}
               <button type="button" className="btn-sm primary" disabled={running} onClick={act}>{running ? 'Running…' : (human ? 'Upload' : 'Generate')}</button>
             </>
           )}
@@ -204,7 +211,8 @@ export default function ArtifactChecklist({ jobId, row, hasOrder }) {
           {PART_DOCS.map(d => slotsOf(d, i).map((slot, si) => (
             <Slot key={`${d.id}.${slot.src}`} name={d.name} slotKey={keySlot(d, slot, i)}
               slot={slot} partIndex={i} sub={si > 0}
-              viewTo={slot.key === 'plan' ? `/proto/parts/${p.tmpl}` : (d.id === 'inspReport' ? `/proto/inspection/${encodeURIComponent(p.name)}` : undefined)} />
+              viewTo={slot.key === 'plan' ? `/proto/parts/${p.tmpl}` : (d.id === 'inspReport' ? `/proto/inspection/${encodeURIComponent(p.name)}` : undefined)}
+              scrollId={hasOrder && d.id === 'inspReport' ? 'qc-3d' : undefined} />
           )))}
           <OtherDocs scope={`p${i}`} hint="Specific to this part — material certificate and the like. Add as many as needed" />
         </div>

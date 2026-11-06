@@ -11,6 +11,7 @@ import {
   Planning, FlowSteps, ApprovedLine,
 } from '../components/capp/ProgramCard';
 import V3RunSync from '../components/capp/V3RunSync';
+import PowerMillButtons from '../components/capp/PowerMillButtons';
 import '../components/capp/program.css';
 
 // The full AI process plan & CAM program for one part of an order (#/proto/program/:orderId/:partIdx):
@@ -102,6 +103,7 @@ export default function ProgramPage() {
         {busy && <div className="cx-state" style={{ marginTop: 10 }}><Spinner /> {busy}</div>}
         {error && <div style={{ marginTop: 10 }}><CappError message={error} /></div>}
         <V3RunSync jobId={jobId} partName={part.name} live={live} onDone={res.reload} />
+        <PowerMillButtons />
         <KpiStrip style={{ marginTop: 14 }} items={[
           { n: setups.map(s => dirLabel(s.dir)).join(' / ') || '—', l: `${setups.length} setup${setups.length === 1 ? '' : 's'}` },
           { n: tools.length || '—', l: 'Tools' },

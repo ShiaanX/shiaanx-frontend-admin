@@ -184,6 +184,9 @@ export default function ProductionBoard() {
                       const s = slotById.get(j.id);
                       if (!s) return null;
                       const committed = j.status === 'PRODUCTION' || j.status === 'SCHEDULING';
+                      // Only a scheduled or running job has an approved plan and a slot on the machine; planning
+                      // and queued orders have no program yet, so no dates.
+                      if (!committed) return null;
                       if (!s.finish) return committed ? <div className="jm" data-testid="card-dates" style={{ marginTop: 5 }}>Start / end: needs an estimate</div> : null;
                       const dl = j.deadline ? new Date(`${j.deadline}T23:59:59`) : null;
                       const late = dl && s.finish > dl;

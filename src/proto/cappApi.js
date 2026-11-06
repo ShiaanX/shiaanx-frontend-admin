@@ -110,3 +110,14 @@ export async function postQuotePdf(id, body) {
   }
   return res.blob();
 }
+
+// A QC sheet the server has prepared for a part (by part name). hasPartQcSheet answers {available};
+// getPartQcSheet resolves to { blob, name } (the .xlsx) or throws.
+export const hasPartQcSheet = (partKey) => request('GET', `/parts/${encodeURIComponent(partKey)}/has-qc-sheet`);
+export async function getPartQcSheet(partKey) {
+  let res;
+  try { res = await fetch(`${CAPP_BASE}/parts/${encodeURIComponent(partKey)}/qc-sheet`); } catch (e) { throw new Error('The earlier results could not be fetched.'); }
+  if (!res.ok) throw new Error('No earlier results are prepared for this part.');
+  const m = /filename="?([^";]+)"?/i.exec(res.headers.get('content-disposition') || '');
+  return { blob: await res.blob(), name: m ? m[1] : `${partKey} QC sheet.xlsx` };
+}

@@ -80,12 +80,18 @@ export default function CappJobRunner({ part, children, runLabel = 'Click here f
   const actions = (
     <div className="cx-runner">
       <input ref={fileInput} type="file" accept=".step,.stp,.STEP,.STP" style={{ display: 'none' }} onChange={onPicked} />
-      {part.fileKey && <button type="button" className="btn-sm primary" disabled={!!busy} onClick={runAttached}>{jobId ? 'Re-run on the attached STEP' : runLabel}</button>}
-      <button type="button" className={`btn-sm ${part.fileKey ? 'ghost' : 'primary'}`} disabled={!!busy} onClick={() => fileInput.current.click()}>
-        <Icon name="upload" size={13} /> {part.fileKey ? 'Choose STEP from disk' : (jobId ? 'Re-run with a STEP from disk' : 'Choose a STEP file')}
-      </button>
-      <button type="button" className="btn-sm text" onClick={() => setShowLink(s => !s)}>Use an existing reference</button>
-      {jobId && <button type="button" className="btn-sm text" onClick={() => setEntry(null)}>Forget</button>}
+      {part.fileKey && <button type="button" className="btn-sm primary" disabled={!!busy} onClick={runAttached}>{jobId ? 'Run again' : runLabel}</button>}
+      {/* Rarely needed: tucked away so the card shows one clear action. */}
+      <details className="cx-advanced">
+        <summary className="btn-sm text" style={{ cursor: 'pointer', listStyle: 'none' }}>More options</summary>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+          <button type="button" className={`btn-sm ${part.fileKey ? 'ghost' : 'primary'}`} disabled={!!busy} onClick={() => fileInput.current.click()}>
+            <Icon name="upload" size={13} /> {part.fileKey ? 'Use a different STEP file' : (jobId ? 'Run with a different STEP file' : 'Choose a STEP file')}
+          </button>
+          <button type="button" className="btn-sm text" onClick={() => setShowLink(s => !s)}>Link an earlier result</button>
+          {jobId && <button type="button" className="btn-sm text" onClick={() => setEntry(null)}>Start over</button>}
+        </div>
+      </details>
     </div>
   );
 

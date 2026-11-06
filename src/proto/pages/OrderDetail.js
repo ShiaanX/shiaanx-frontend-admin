@@ -10,7 +10,8 @@ import PartPickerModal from '../components/PartPickerModal';
 import ProcessChips, { NotOrderedBadge, isOrdered } from '../components/ProcessChips';
 import RepeatLinks from '../components/RepeatLinks';
 import ComplaintsCard from '../components/ComplaintsCard';
-import LiveAnalysisCard from '../components/capp/LiveAnalysisCard';
+import EarlierProduction from '../components/capp/EarlierProduction';
+import OrderQcSection from '../components/OrderQcSection';
 import ProgramCard from '../components/capp/ProgramCard';
 import StatusTimeline from '../components/StatusTimeline';
 import { useProtoData } from '../ProtoDataContext';
@@ -153,7 +154,8 @@ export default function OrderDetail() {
         </div>
       </div>
       {!planCardTop && <ProgramCard row={r} />}
-      <LiveAnalysisCard title="Production tracking — program, previous batches and QC" parts={ordered.length ? ordered : r.parts} panels={['tracking']} runLabel="Load this part's production data" />
+      {(ordered.length ? ordered : r.parts).map(p => <EarlierProduction key={p.tmpl || p.name} part={p} />)}
+      <OrderQcSection row={r} parts={ordered.length ? ordered : r.parts} />
       {showUpdate && <UpdateEnquiryModal row={r} onClose={() => setShowUpdate(false)} />}
       {picker === 'add' && (
         <PartPickerModal

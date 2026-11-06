@@ -9,6 +9,7 @@ import { useCappResource, CappError, Spinner, fmtNum, show, POLL_MS } from './Ca
 import { isOrdered } from '../ProcessChips';
 import CappJobRunner from './CappJobRunner';
 import V3RunSync from './V3RunSync';
+import PowerMillButtons from './PowerMillButtons';
 import './program.css';
 
 // Process plan & CAM program (AI, v3) for one part of an order: GET /jobs/{id}/program on
@@ -248,6 +249,7 @@ function PartProgram({ row, partIndex }) {
         </>
       )}
       <V3RunSync jobId={jobId} partName={part.name} live={live} onDone={res.reload} />
+      <PowerMillButtons />
       <div className="pg-actions">
         <Link className="btn btn-ghost" to={`/proto/program/${row.uuid}/${partIndex}`} data-program-view><Icon name="doc" size={14} /> View program</Link>
         <button type="button" className="btn btn-ghost" onClick={openV3Console} data-program-console>Open ShiaanX planner console (PowerMill) ↗</button>
