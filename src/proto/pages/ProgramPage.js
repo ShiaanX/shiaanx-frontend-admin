@@ -109,7 +109,6 @@ export default function ProgramPage() {
           { n: tools.length || '—', l: 'Tools' },
           { n: toolpathCount === null ? '—' : toolpathCount, l: 'Toolpaths' },
           { n: fmtMin(cycle), l: 'AI cycle time / part' },
-          ...(live && live.powermill_cutting_minutes_total !== undefined ? [{ n: fmtMin(live.powermill_cutting_minutes_total), l: 'PowerMill toolpath time' }] : []),
         ]} />
         {notes.length > 0 && <ul className="pg-notes">{notes.map((n, i) => <li key={i}>{show(n)}</li>)}</ul>}
       </div>
@@ -126,7 +125,6 @@ export default function ProgramPage() {
                   <dt>Held in</dt><dd>{show(s.holding)}{s.heldOn && <div className="cell-sub">on the {String(s.heldOn).split(' (')[0]}</div>}</dd>
                   <dt>Billet</dt><dd className="mono">{show(s.billet)}</dd>
                   {s.planMinutes !== null && s.planMinutes !== undefined && <><dt>AI plan</dt><dd className="mono">{fmtMin(s.planMinutes)}</dd></>}
-                  {s.pmMinutes !== undefined && <><dt>PowerMill</dt><dd className="mono">{fmtMin(s.pmMinutes)}</dd></>}
                   {s.tools.length > 0 && <><dt>Tools</dt><dd style={{ fontSize: 12 }}>{s.tools.map(toolName).join(', ')}</dd></>}
                 </dl>
               </div>

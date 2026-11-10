@@ -12,7 +12,6 @@ const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const same = (a, b) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
 const isLocalApp = same(CAPP_BASE, LAPTOP) || same(CAPP_BASE, 'http://127.0.0.1:8001');
 const fmtWhen = (iso) => { const d = iso ? new Date(iso) : null; return d && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''; };
-const fmtMin = (v) => (typeof v === 'number' ? `${Math.round(v * 10) / 10} min` : '—');
 
 async function getJson(url, ms = 2000) {
   const ctl = new AbortController();
@@ -119,7 +118,7 @@ export default function V3RunSync({ jobId, partName, live, onDone }) {
       {latest && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span data-v3sync-latest>
-            <b>Latest planner run:</b> {latest.run.name}, {fmtWhen(latest.run.updated || latest.run.started)}, {latest.n} toolpaths, {fmtMin(latest.minutes)}
+            <b>Latest planner run:</b> {latest.run.name}, {fmtWhen(latest.run.updated || latest.run.started)}, {latest.n} toolpaths
           </span>
           <button type="button" className="btn btn-ghost" disabled={busy || (upToDate && !isLocalApp)} onClick={use} data-v3sync-use>
             {busy ? 'Working…' : upToDate && !isLocalApp ? 'In use' : isLocalApp ? 'Refresh' : 'Use this run'}
