@@ -101,7 +101,7 @@ export default function EarlierProduction({ part }) {
   const key = partKeyOf(part);
   const { entry, setEntry } = useCappJob(key);
   const jobId = entry && entry.jobId;
-  const [view, setView] = useState('run2');   // run2 = batch 2 against its plan; run1 = batch 1 against the auto-plan
+  const [view, setView] = useState('run1');   // opens on batch 1 (as in the QC view); run1 = batch 1 against the auto-plan, run2 = batch 2 against its plan
 
   useEffect(() => {
     if (jobId || !key || tried.has(key)) return;
