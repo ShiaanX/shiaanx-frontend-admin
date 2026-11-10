@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import Icon from '../icons';
 import WhyPanel, { hasWhyData } from './WhyPanel';
 import { openFlowSession } from '../api';
+import { CAPP_BASE } from '../cappApi';
 
 // Where the 3D QC view is served from: the labeling app in the shiaanx-CAPP repo. On the dev server
 // it sits behind the same address as this app; REACT_APP_QC_URL points elsewhere for local work.
@@ -53,6 +54,7 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
   const [error, setError] = useState('');
   const [frameKey, setFrameKey] = useState(0);
   const [qcRows, setQcRows] = useState(null);   // the sheet results the 3D view colours, for the Why panel
+  const [qcSource, setQcSource] = useState('');  // file name of the sheet those results came from
 
   const report = reportState;
 
@@ -85,9 +87,31 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
     if (reach !== true || !linkedJob || !hasWhyData(part)) { setQcRows(null); return undefined; }
     let dead = false;
     qcFetch(`${QC_VIEW_URL}/api/labeling-jobs/${linkedJob}/qc-results`).then(r => (r.ok ? r.json() : null))
-      .then(d => { if (!dead) setQcRows(d && d.has_qc ? d.results : null); }).catch(() => { if (!dead) setQcRows(null); });
+      .then(d => { if (!dead) { setQcRows(d && d.has_qc ? d.results : null); setQcSource((d && d.qc_source) || ''); } }).catch(() => { if (!dead) setQcRows(null); });
     return () => { dead = true; };
   }, [reach, linkedJob, frameKey, info && info.tagged]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Motor Mount: the two production batches are two QC sheets with the real readings of each. Choosing one
+  // sends that sheet's readings to the same view (balloons and CAD links stay), so the model recolours.
+  const batch = /batch 2/i.test(qcSource) ? 2 : /batch 1/i.test(qcSource) ? 1 : null;
+  const switchBatch = async (n) => {
+    setError('');
+    try {
+      setBusy(`Loading batch ${n} readings…`);
+      const res = await qcFetch(`${CAPP_BASE}/qc-batches/motor-mount/${n}`);
+      if (!res.ok) throw new Error(`Batch ${n} readings are not available (${res.status}).`);
+      await postFile(`${QC_VIEW_URL}/api/labeling-jobs/${linkedJob}/qc-results`, await res.blob(), `Motor Mount QC - batch ${n}.xlsx`);
+      setBusy('');
+      setFrameKey(k => k + 1);
+    } catch (e) { setBusy(''); setError(e.message || String(e)); }
+  };
+  const batchStarted = useRef(false);
+  useEffect(() => {   // opens on batch 1, whatever sheet the job was seeded with
+    if (!hasWhyData(part) || batchStarted.current || reach !== true || !linkedJob || !qcRows || batch !== null || busy) return;
+    batchStarted.current = true;
+    switchBatch(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reach, linkedJob, qcRows, batch, busy]);
 
   const loadInfo = async (jobId, keepMode) => {
     const res = await qcFetch(`${QC_VIEW_URL}/api/labeling-jobs/${jobId}/dimensions`);
@@ -205,6 +229,10 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
           <div className="filter-pills">
             <div className={`pill ${mode === 'result' ? 'active' : ''}`} onClick={() => { setMode('result'); loadInfo(linkedJob, true); setFrameKey(k => k + 1); }}>Result</div>
             <div className={`pill ${mode === 'tag' ? 'active' : ''}`} onClick={() => setMode('tag')}>Tag dimensions ({info.tagged} of {info.total} done)</div>
+            {hasWhyData(part) && mode === 'result' && <>
+              <div className={`pill ${batch === 1 ? 'active' : ''}`} onClick={() => !busy && batch !== 1 && switchBatch(1)}>Batch 1 · as first made</div>
+              <div className={`pill ${batch === 2 ? 'active' : ''}`} onClick={() => !busy && batch !== 2 && switchBatch(2)}>Batch 2 · after the change</div>
+            </>}
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
             {balloonKey && <button type="button" className="btn-text" onClick={() => openFile(balloonKey)}>Open ballooned drawing</button>}
@@ -220,7 +248,7 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
         {mode === 'result' && info.tagged === 0 && <p className="page-sub" style={{ margin: '0 0 10px' }}>Nothing is tagged yet, so there is nothing to show on the model. Use Tag dimensions first.</p>}
         <iframe key={`${mode}-${frameKey}`} title="3D QC view" src={`${QC_VIEW_URL}/${mode === 'tag' ? 'dimensions' : 'inspection'}?job=${linkedJob}&embed=1&v=${PAGE_LOAD}`}
           style={{ width: '100%', height: 760, border: '1px solid var(--border)', borderRadius: 10 }} />
-        {mode === 'result' && hasWhyData(part) && <WhyPanel results={qcRows} />}
+        {mode === 'result' && hasWhyData(part) && <WhyPanel results={qcRows} batch={batch} />}
       </>
     );
   }

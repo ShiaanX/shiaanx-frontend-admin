@@ -83,7 +83,7 @@ function Rules() {
                 <td style={{ minWidth: 280 }}><div style={{ fontWeight: 600 }}>{r.title}</div>{r.title !== r.rule && <div className="cell-sub">{r.rule}</div>}</td>
                 <td className="cell-sub" style={{ minWidth: 200 }}>{r.evidence || 'Cause found by the Defects & why logic on the Motor Mount readings and programs.'}{r.confidence ? ` (${r.confidence})` : ''}</td>
                 <td className="cell-sub">{r.part}</td>
-                <td><span className="badge b-near">{r.status}</span></td>
+                <td><span className={`badge ${/^confirmed/.test(r.status) ? "b-pass" : "b-near"}`}>{r.status}</span></td>
               </tr>
             ))}
           </tbody>

@@ -17,11 +17,20 @@ const SHEET_VERDICT = { fail: 'fail', near_limit: 'near' };
 const RANK = { fail: 2, near: 1 };
 const fmt = (v) => (v === null || v === undefined ? '—' : Number(v).toFixed(2));
 
-export default function WhyPanel({ results }) {
+export default function WhyPanel({ results, batch }) {
   const data = MOTOR_MOUNT_CLOSED_LOOP;
   const [open, setOpen] = useState(null);
   const gradedByRun = useMemo(() => Object.fromEntries(data.runs.map(r => [r.id, r.dims.map(gradeDim)])), [data]);
   if (!results) return null;
+
+  const toolOf = (run, sl) => cuttersOf(run, sl).filter(c => c.role !== 'rough').map(c => `${c.name} (${c.toolType} Ø${c.toolDia}${c.mainFeed || c.cuttingFeed ? `, F${c.cuttingFeed || c.mainFeed}` : ''})`).join(', ') || 'no finishing tool';
+  const fixed = data.runs.length === 2 ? gradedByRun.run1.map(g1 => {
+    const g2 = gradedByRun.run2.find(x => x.sl === g1.sl);
+    if (!g2 || (g1.verdict !== 'fail' && g1.verdict !== 'near') || g2.verdict !== 'pass') return null;
+    const feat = data.features[g1.sl];
+    const causes = causesFor(g1, feat, cuttersOf(data.runs[0], g1.sl), data.runs[0], data, gradedByRun);
+    return { sl: g1.sl, g1, g2, top: causes[0], before: toolOf(data.runs[0], g1.sl), after: toolOf(data.runs[1], g1.sl) };
+  }).filter(Boolean) : [];
 
   const issues = results.filter(r => SHEET_VERDICT[r.verdict])
     .sort((a, b) => RANK[SHEET_VERDICT[b.verdict]] - RANK[SHEET_VERDICT[a.verdict]] || a.balloon - b.balloon);
@@ -33,11 +42,29 @@ export default function WhyPanel({ results }) {
         The dimensions marked red or amber above, with the likely cause for each, worked out per production batch. Rules link to the Factory rules library.
       </p>
       {issues.length === 0 && <p className="page-sub">Every measured dimension is within tolerance.</p>}
+      {batch === 2 && fixed.length > 0 && (
+        <div className="card" style={{ marginBottom: 12 }} data-fixed-since>
+          <h4 style={{ margin: '0 0 6px', fontSize: 14 }}>Fixed since batch 1</h4>
+          {fixed.map(f => {
+            const rl = f.top && ruleFor(f.top.title);
+            const before = f.g1.worst, after = f.g2;
+            return (
+              <div key={f.sl} style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>#{f.sl} {f.g1.label}: {fmt(before.value)} out of tolerance in batch 1, {fmt(after.min)}–{fmt(after.max)} in batch 2 <VerdictBadge v="pass" />
+                  {rl && <Link to={`/proto/factory?tab=rules&rule=${rl.id}`} className="badge b-quoted" style={{ marginLeft: 6 }}>Rule {rl.id} · confirmed by batch 2</Link>}</div>
+                <div className="page-sub" style={{ marginTop: 3 }}>
+                  Why it was out: {f.top ? f.top.title : 'see batch 1'}. What changed: {f.before} became {f.after}.
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {issues.map(row => {
         const sl = row.balloon;
         const feat = data.features[sl];
         const verdict = SHEET_VERDICT[row.verdict];
-        const perBatch = data.runs.map(run => {
+        const perBatch = data.runs.filter(run => !batch || run.id === `run${batch}`).map(run => {
           const g = gradedByRun[run.id].find(x => x.sl === sl);
           if (!g || (g.verdict !== 'fail' && g.verdict !== 'near')) return null;
           return { run, g, cutters: cuttersOf(run, sl), causes: causesFor(g, feat, cuttersOf(run, sl), run, data, gradedByRun) };
