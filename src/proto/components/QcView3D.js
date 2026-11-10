@@ -52,6 +52,7 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [frameKey, setFrameKey] = useState(0);
+  const [qcRows, setQcRows] = useState(null);   // the sheet results the 3D view colours, for the Why panel
 
   const report = reportState;
 
@@ -79,6 +80,14 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
     setUp(report);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSetup, reach, linkedJob, report, busy, error]);
+
+  useEffect(() => {
+    if (reach !== true || !linkedJob || !hasWhyData(part)) { setQcRows(null); return undefined; }
+    let dead = false;
+    qcFetch(`${QC_VIEW_URL}/api/labeling-jobs/${linkedJob}/qc-results`).then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!dead) setQcRows(d && d.has_qc ? d.results : null); }).catch(() => { if (!dead) setQcRows(null); });
+    return () => { dead = true; };
+  }, [reach, linkedJob, frameKey, info && info.tagged]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadInfo = async (jobId, keepMode) => {
     const res = await qcFetch(`${QC_VIEW_URL}/api/labeling-jobs/${jobId}/dimensions`);
@@ -211,7 +220,7 @@ export default function QcView3D({ part, linkedJob, onLink, reportKey, balloonKe
         {mode === 'result' && info.tagged === 0 && <p className="page-sub" style={{ margin: '0 0 10px' }}>Nothing is tagged yet, so there is nothing to show on the model. Use Tag dimensions first.</p>}
         <iframe key={`${mode}-${frameKey}`} title="3D QC view" src={`${QC_VIEW_URL}/${mode === 'tag' ? 'dimensions' : 'inspection'}?job=${linkedJob}&embed=1&v=${PAGE_LOAD}`}
           style={{ width: '100%', height: 760, border: '1px solid var(--border)', borderRadius: 10 }} />
-        {mode === 'result' && hasWhyData(part) && <WhyPanel />}
+        {mode === 'result' && hasWhyData(part) && <WhyPanel results={qcRows} />}
       </>
     );
   }
